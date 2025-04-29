@@ -1,0 +1,160 @@
+---
+  # ===== AIRGAP ===== # # NEED TO TEST
+- name: RHEL Install
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' and deploymentType == "AIRGAP"
+  block:
+    - name: Find supplied .tar.gz in playbook packages dir
+      ansible.builtin.find:
+        paths: packages/
+        patterns: "elasticsearch-*.tar.gz"
+        use_regex: no
+      register: "{{ availablePackage }}"
+
+    - name: Add Elasticsearch Repo (RHEL)
+      ansible.builtin.dnf:
+        name: /packages/{{ availablePackage }}
+        gpgcheck: 0
+        enabled: 1
+        priority: 1
+        description: "Elasticsearch 9.x repo"
+      register: esPackage
+      become: true
+
+    - name: Install Elasticsearch
+      ansible.builtin.dnf:
+        name: elasticsearch-{{ esVersion }}
+        state: present
+      become: true
+      notify: Restart Elasticsearch
+      register: esPackage
+
+    - name: Allow Firewall Ports
+      ansible.builtin.shell: "firewall-cmd --add-port {{ item }} --permanent && firewall-cmd --reload"
+      loop:
+        - 9200/tcp
+        - 9300/tcp
+      become: true
+      changed_when: false
+
+  # ===== Open-internet ===== # NEED TO TEST
+- name: RHEL Install
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' and deploymentType == "openInternet"
+  block:
+    - name: Add Elasticsearch Repo (RHEL)
+      ansible.builtin.dnf:
+        name: elasticsearch-9.x
+        baseurl:
+          - "{{ esRepoPath | default('{{ OI_URL }}') }}"
+        gpgcheck: 0
+        enabled: 1
+        priority: 1
+        description: "Elasticsearch 9.x repo"
+      register: esPackage
+      become: true
+
+    - name: Install Elasticsearch
+      ansible.builtin.dnf:
+        name: elasticsearch-{{ esVersion }}
+        state: present
+      become: true
+      notify: Restart Elasticsearch
+      register: esPackage
+
+    - name: Allow Firewall Ports
+      ansible.builtin.shell: "firewall-cmd --add-port {{ item }} --permanent && firewall-cmd --reload"
+      loop:
+        - 9200/tcp
+        - 9300/tcp
+      become: true
+      changed_when: false
+
+  # ===== DODIN ===== # NEED TO TEST
+- name: RHEL Install
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux' and deploymentType == "DODIN"
+  block:
+    - name: Add DISA Repos
+      ansible.builtin.dnf:
+      name: "{{ item.name }}"
+      baseurl:
+        - "{{ item.baseurl }}"
+      gpgcheck: 0
+      enabled: 1
+      priority: 1
+      description: "{{ item.description }}"
+      become: true
+      loop:
+        - name: "disa_appstream"
+          description: "DISA 8 - AppStream"
+          baseurl: "{{ DODIN_AppStream }}"
+        - name: "disa_baseos"
+          description: "DISA 8 - BaseOS"
+          baseurl: "{{ DODIN_BaseOS }}"
+    
+    - name: Add DoD Root for proxy trust
+      copy:
+        dest: "/etc/pki/ca-trust/source/anchors/{{ item | basename }}"
+        src: "{{ item }}"
+      with_fileglob: "certificates/dod-*"
+      become: true
+    
+    - name: Update CA Trust
+      shell: "update-ca-trust"
+      become: true
+      changed_when: false
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+
+      # Uncomment the tasks below to use DISA repos if on a DODIN network
+# - name: Add DISA Repos
+#   ansible.builtin.yum_repository:
+#     name: "{{ item.name }}"
+#     baseurl:
+#       - "{{ item.baseurl }}"
+#     gpgcheck: 0
+#     enabled: 1
+#     priority: 1
+#     description: "{{ item.description }}"
+#   become: true
+#   loop:
+#     - name: "disa_appstream"
+#       description: "DISA 8 - AppStream"
+#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/appstream/os/"
+#     - name: "disa_baseos"
+#       description: "DISA 8 - BaseOS"
+#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/baseos/os/"
+#
+# - name: Add DoD Root for proxy trust
+#   copy:
+#     dest: "/etc/pki/ca-trust/source/anchors/{{ item | basename }}"
+#     src: "{{ item }}"
+#   with_fileglob: "certificates/dod-*"
+#   become: true
+#
+# - name: Update CA Trust
+#   shell: "update-ca-trust"
+#   become: true
+#   changed_when: false

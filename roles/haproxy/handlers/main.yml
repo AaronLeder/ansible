@@ -1,0 +1,22 @@
+- name: Check New Config
+  ansible.builtin.command:
+    cmd: haproxy -c -f /etc/haproxy/haproxy.cfg.new
+  become: true
+
+- name: Copy New Config
+  ansible.builtin.copy:
+    src: /etc/haproxy/haproxy.cfg.new
+    dest: /etc/haproxy/haproxy.cfg
+    remote_src: true
+  become: true
+  listen:
+    - Check New Config
+
+- name: Restart haproxy
+  ansible.builtin.service:
+    name: haproxy
+    state: restarted
+    enabled: true
+  become: true
+  listen:
+    - Check New Config

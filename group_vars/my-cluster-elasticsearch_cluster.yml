@@ -1,0 +1,24 @@
+---
+# Valid configurations are:
+# name: string, unique name for each config (required)
+# roles: comma-seperated array of strings, list of roles to enable for the configuration. Uses Elasticsearch roles verbatim (required)
+#   EX: ["master", "data_content", "data_hot"]
+# heap: string, set a heap size override for Elasticsearch, defaults to auto-detect (optional)
+#   EX: "3g" or "1024m"
+# hosts: comma-seperated array of strings, list of hosts to enable the configuration for (required)
+# NOTE: As of this revision, ONLY ONE config can have the master role UNLESS the second config is also voting_only
+
+elasticsearchConfigs:
+
+  - name: "All-in-one"
+    roles: ["master", "data", "ingest", "ml", "transform", "remote_cluster_client"]
+    hosts: ["rhel1", "rhel2", "rhel3"]
+
+  # - name: "Dedicated Master"
+  #   roles: ["master"]
+  #   hosts:
+  
+  # - name: "Data Hot Ingest Content"
+  #   roles: ["data_hot", "ingest", "data_content"]
+  #   hosts:
+  #   heap: "31g"

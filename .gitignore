@@ -31,3 +31,7 @@ Thumbs.db
 
 # Optional: Ignore local inventories (if generated dynamically)
 inventory/generated/
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6ee488a (Initial Commit)
