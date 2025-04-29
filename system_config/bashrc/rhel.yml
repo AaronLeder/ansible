@@ -1,0 +1,128 @@
+---
+- name: Update .bashrc on remote hosts with custom colors and prompt
+  hosts: all
+  become: yes
+  gather_facts: false
+
+  tasks:
+
+    - name: Ensure only the required content is in root .bashrc
+      ansible.builtin.copy:
+        dest: /root/.bashrc
+        content: |
+          # .bashrc
+
+          # Source global definitions
+          if [ -f /etc/bashrc ]; then
+              . /etc/bashrc
+          fi
+
+          # User specific environment
+          if ! [[ "$PATH" =~ "$HOME/.local/bin:$HOME/bin:" ]]
+          then
+              PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+          fi
+          export PATH
+
+          # Uncomment the following line if you don't like systemctl's auto-paging feature:
+          # export SYSTEMD_PAGER=
+
+          # User specific aliases and functions
+          #
+          #
+          #
+
+    - name: Modify root .bashrc with custom aliases and prompt
+      ansible.builtin.blockinfile:
+        path: /root/.bashrc
+        insertafter: '^# User specific aliases and functions'
+        block: |
+          # --- Aliases
+          alias ll='ls -lh'
+          export HISTTIMEFORMAT="%F %T "
+
+          # --- Colors
+          RESET="\[\017\]"
+          NOCOLOR="\[\033[0m\]"
+          RED="\[\033[91m\]"
+          YELLOW="\[\033[93m\]"
+          WHITE="\[\033[97m\]"
+          BLUE="\[\033[34m\]"
+          CYAN="\[\033[36m\]"
+          PINK="\[\033[95m\]"
+
+          GOOD="${WHITE}#${NOCOLOR}"
+          BAD="${RED}#${NOCOLOR}"
+          SELECT="if [ \$? = 0 ]; then echo \"${GOOD}\"; else echo \"${BAD}\"; fi"
+
+          PS1="${RESET}[${NOCOLOR}${RED}\u${NOCOLOR}@${NOCOLOR}${RED}\h${NOCOLOR}]${NOCOLOR}[${NOCOLOR}${RED}\W${NOCOLOR}]${NOCOLOR} \`${SELECT}\` "
+          PS2="Continue > "
+          PS3="Continue >> "
+          PS4="Continue >>> "
+
+          export LESS_TERMCAP_md=$(tput bold; tput setaf 11)
+          export LESS_TERMCAP_so=$(tput bold; tput setaf 2; tput setab 5)
+          export LESS_TERMCAP_se=$(tput rmso; tput sgr0)
+          export LESS_TERMCAP_us=$(tput smul; tput bold; tput setaf 198)
+          export LESS_TERMCAP_ue=$(tput rmul; tput sgr0)
+
+    - name: Ensure only the required content is in msiemauto .bashrc
+      ansible.builtin.copy:
+        dest: /home/msiemauto/.bashrc
+        content: |
+          # .bashrc
+
+          # Source global definitions
+          if [ -f /etc/bashrc ]; then
+              . /etc/bashrc
+          fi
+
+          # User specific environment
+          if ! [[ "$PATH" =~ "$HOME/.local/bin:$HOME/bin:" ]]
+          then
+              PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+          fi
+          export PATH
+
+          # Uncomment the following line if you don't like systemctl's auto-paging feature:
+          # export SYSTEMD_PAGER=
+
+          # User specific aliases and functions
+          #
+          #
+          #
+
+    - name: Modify msiemauto .bashrc with custom aliases and prompt
+      ansible.builtin.blockinfile:
+        path: /home/msiemauto/.bashrc
+        insertafter: '^# User specific aliases and functions'
+        block: |
+          # --- Aliases
+          alias ll='ls -lh'
+          export HISTTIMEFORMAT="%F %T "
+
+          # --- Colors
+          RESET="\[\017\]"
+          NOCOLOR="\[\033[0m\]"
+          RED="\[\033[91m\]"
+          YELLOW="\[\033[93m\]"
+          WHITE="\[\033[97m\]"
+          BLUE="\[\033[34m\]"
+          CYAN="\[\033[36m\]"
+          PINK="\[\033[95m\]"
+
+          GOOD="${WHITE}#${NOCOLOR}"
+          BAD="${RED}#${NOCOLOR}"
+          SELECT="if [ \$? = 0 ]; then echo \"${GOOD}\"; else echo \"${BAD}\"; fi"
+
+          PS1="${RESET}[${NOCOLOR}${YELLOW}\u${NOCOLOR}@${NOCOLOR}${YELLOW}\h${NOCOLOR}]${NOCOLOR}[${NOCOLOR}${YELLOW}\W${NOCOLOR}]${NOCOLOR} \`${SELECT}\` "
+          PS2="Continue > "
+          PS3="Continue >> "
+          PS4="Continue >>> "
+
+          export LESS_TERMCAP_md=$(tput bold; tput setaf 11)
+          export LESS_TERMCAP_so=$(tput bold; tput setaf 2; tput setab 5)
+          export LESS_TERMCAP_se=$(tput rmso; tput sgr0)
+          export LESS_TERMCAP_us=$(tput smul; tput bold; tput setaf 198)
+          export LESS_TERMCAP_ue=$(tput rmul; tput sgr0)
+
