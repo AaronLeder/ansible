@@ -1,0 +1,231 @@
+---
+
+# ======================================== READ ME ======================================== #
+# Created by : Aaron
+# Created    : 03/13/2025 || Last Edited: 03/13/2025
+# Purpose    : This YML checks for running services, to configure Metricbeat on Kafka hosts.
+# Run the following from ledera:
+# ansible-playbook playbooks/v2_metricbeat_config.yml -i inventory/site.yml -K -b
+# ======================================== READ ME ======================================== #
+
+- name: Configure Metricbeat
+  order: sorted
+  hosts: all
+  gather_facts: true
+  vars:
+    services_to_check:
+      - confluent-server.service
+      - confluent-ksqldb.service
+      - confluent-zookeeper.service
+      - confluent-schema-registry.service
+      - confluent-kafka-connect-multi.service
+      - confluent-kafka-connect-syslog001.service
+      - confluent-kafka-connect-syslog002.service
+      - confluent-kafka-connect-syslog003.service
+      - confluent-control-center.service
+    dnfName: "metricbeat"
+    dnfVersion: "8.16.1-1"
+    dnfNameVersion: "{{ dnfName }}-{{ dnfVersion }}"
+
+  tasks:
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Install {{ dnfNameVersion }}
+      ansible.builtin.dnf:
+        name: "{{ dnfNameVersion }}"
+        state: present
+        disable_gpg_check: true
+      when: "'metricbeat.service' not in ansible_facts.services"
+      become: true     
+
+    - name: Enable Metricbeat Modules on Brokers
+      ansible.builtin.shell:
+        cmd: metricbeat modules enable system kafka prometheus
+      when: >
+        'confluent-server.service' in ansible_facts.services and
+        ansible_facts.services['confluent-server.service']['state'] is defined and
+        ansible_facts.services['confluent-server.service']['state'] == 'running'
+
+    - name: Enable Metricbeat Modules on Non-Brokers
+      ansible.builtin.shell:
+        cmd: metricbeat modules enable system prometheus
+      when: >
+        ('confluent-ksqldb.service' in ansible_facts.services and
+         ansible_facts.services['confluent-ksqldb.service']['state'] is defined and
+         ansible_facts.services['confluent-ksqldb.service']['state'] == 'running') or
+        ('confluent-zookeeper.service' in ansible_facts.services and
+         ansible_facts.services['confluent-zookeeper.service']['state'] is defined and
+         ansible_facts.services['confluent-zookeeper.service']['state'] == 'running') or
+        ('confluent-schema-registry.service' in ansible_facts.services and
+         ansible_facts.services['confluent-schema-registry.service']['state'] is defined and
+         ansible_facts.services['confluent-schema-registry.service']['state'] == 'running') or
+        ('confluent-kafka-connect-multi.service' in ansible_facts.services and
+         ansible_facts.services['confluent-kafka-connect-multi.service']['state'] is defined and
+         ansible_facts.services['confluent-kafka-connect-multi.service']['state'] == 'running') or
+        ('confluent-kafka-connect-syslog001.service' in ansible_facts.services and
+         ansible_facts.services['confluent-kafka-connect-syslog001.service']['state'] is defined and
+         ansible_facts.services['confluent-kafka-connect-syslog001.service']['state'] == 'running') or
+        ('confluent-kafka-connect-syslog002.service' in ansible_facts.services and
+         ansible_facts.services['confluent-kafka-connect-syslog002.service']['state'] is defined and
+         ansible_facts.services['confluent-kafka-connect-syslog002.service']['state'] == 'running') or
+        ('confluent-kafka-connect-syslog003.service' in ansible_facts.services and
+         ansible_facts.services['confluent-kafka-connect-syslog003.service']['state'] is defined and
+         ansible_facts.services['confluent-kafka-connect-syslog003.service']['state'] == 'running') or
+        ('confluent-control-center.service' in ansible_facts.services and
+         ansible_facts.services['confluent-control-center.service']['state'] is defined and
+         ansible_facts.services['confluent-control-center.service']['state'] == 'running')
+
+    - name: Copy the metricbeat.yml config
+      ansible.builtin.copy:
+        src: /home/msiemauto/playbooks/elastic/beats/templates/metricbeat.yml
+        dest: /etc/metricbeat/
+
+    - name: Copy the system.yml config
+      ansible.builtin.copy:
+        src: /home/msiemauto/playbooks/elastic/beats/templates/system.yml
+        dest: /etc/metricbeat/modules.d/
+
+    - name: Copy the kafka.yml config
+      ansible.builtin.copy:
+        src: /home/msiemauto/playbooks/elastic/beats/templates/kafka.yml
+        dest: /etc/metricbeat/modules.d/
+      when: >
+        'confluent-server.service' in ansible_facts.services and
+        ansible_facts.services['confluent-server.service']['state'] is defined and
+        ansible_facts.services['confluent-server.service']['state'] == 'running'
+
+    - name: Copy the prometheus.yml config
+      ansible.builtin.copy:
+        src: /home/msiemauto/playbooks/elastic/beats/templates/prometheus.yml
+        dest: /etc/metricbeat/modules.d/
+
+    - name: metricbeat.yml adjustment for Kafka topic
+      ansible.builtin.replace:
+        path: /etc/metricbeat/metricbeat.yml
+        regexp: "kafkaTopic"
+        replace: "{{ metricbeatKafkaTopic }}"
+
+    - name: metricbeat.yml adjustment for Kafka hosts
+      ansible.builtin.replace:
+        path: /etc/metricbeat/metricbeat.yml
+        regexp: "outputKafka"
+        replace: "{{ metricbeatOutputKafka }}" 
+
+    - name: Update kafka.yml for Brokers
+      ansible.builtin.blockinfile:
+        path: /etc/metricbeat/modules.d/kafka.yml
+        marker: ""
+        block: |
+          # Kafka metrics collected using the Kafka protocol       
+          - module: kafka
+            metricsets:
+              - consumergroup
+            period: 3m
+            hosts: ["{{ inventory_hostname }}:9095"]
+            client_id: metricbeat
+            retries: 3
+          - module: kafka
+            metricsets:
+              - broker
+            period: 3m
+            enabled: true
+            hosts: ["https://{{ inventory_hostname }}:7771"]
+            security.protocol: "SSL"
+            ssl.enabled: true
+            ssl.certificate_authorities: ["/var/ssl/private/ca.crt"]
+            ssl.certificate: "/var/ssl/private/kafka_broker.crt"
+            ssl.key: "/var/ssl/private/kafka_broker.key"
+        insertbefore: EOF
+      when: >
+        'confluent-server.service' in ansible_facts.services and
+        ansible_facts.services['confluent-server.service']['state'] is defined and
+        ansible_facts.services['confluent-server.service']['state'] == 'running'
+
+    - name: Update Prometheus.yml for Zookeepers
+      ansible.builtin.blockinfile:
+        path: /etc/metricbeat/modules.d/prometheus.yml
+        marker: ""
+        block: |
+          # ===== Zookeeper ===== #
+          - module: prometheus
+            period: 3m
+            hosts: [{{ prometheusZookeeper }}]
+            metrics_path: /metrics
+        insertbefore: EOF
+      when: >       
+        'confluent-zookeeper.service' in ansible_facts.services and
+         ansible_facts.services['confluent-zookeeper.service']['state'] is defined and
+         ansible_facts.services['confluent-zookeeper.service']['state'] == 'running'
+
+    - name: Update Prometheus.yml for Brokers
+      ansible.builtin.blockinfile:
+        path: /etc/metricbeat/modules.d/prometheus.yml
+        marker: ""
+        block: |
+          # ===== Kafka Broker ===== #
+          - module: prometheus
+            period: 3m
+            hosts: [{{ prometheusBroker }}]
+            metrics_path: /metrics
+        insertbefore: EOF
+      when: >
+        'confluent-server.service' in ansible_facts.services and
+        ansible_facts.services['confluent-server.service']['state'] is defined and
+        ansible_facts.services['confluent-server.service']['state'] == 'running'
+
+    - name: Update Prometheus.yml for KSQLs
+      ansible.builtin.blockinfile:
+        path: /etc/metricbeat/modules.d/prometheus.yml
+        marker: ""
+        block: |
+          # ===== KSQL ===== #
+          - module: prometheus
+            period: 3m
+            hosts: [{{ prometheusKSQL }}]
+            metrics_path: /metrics
+        insertbefore: EOF
+      when: >
+        'confluent-ksqldb.service' in ansible_facts.services and
+         ansible_facts.services['confluent-ksqldb.service']['state'] is defined and
+         ansible_facts.services['confluent-ksqldb.service']['state'] == 'running'
+
+    - name: Update Prometheus.yml for Connect
+      ansible.builtin.blockinfile:
+        path: /etc/metricbeat/modules.d/prometheus.yml
+        marker: ""
+        block: |
+          # ===== Kafka Connect ===== #
+          - module: prometheus
+            period: 3m
+            hosts: [ {{ prometheusConnect }}]
+            metrics_path: /metrics
+        insertbefore: EOF
+      when: >
+        ('confluent-kafka-connect-syslog001.service' in ansible_facts.services and
+         ansible_facts.services['confluent-kafka-connect-syslog001.service']['state'] is defined and
+         ansible_facts.services['confluent-kafka-connect-syslog001.service']['state'] == 'running') or
+        ('confluent-kafka-connect-syslog002.service' in ansible_facts.services and
+         ansible_facts.services['confluent-kafka-connect-syslog002.service']['state'] is defined and
+         ansible_facts.services['confluent-kafka-connect-syslog002.service']['state'] == 'running') or
+        ('confluent-kafka-connect-syslog003.service' in ansible_facts.services and
+         ansible_facts.services['confluent-kafka-connect-syslog003.service']['state'] is defined and
+         ansible_facts.services['confluent-kafka-connect-syslog003.service']['state'] == 'running')
+
+    - name: Test Metricbeat for syntax issues (metricbeat.yml)
+      ansible.builtin.shell:
+        cmd: metricbeat test config
+      register: testConfig
+      ignore_errors: true
+
+    - name: Warn of an error with syntax configuration issues -- metricbeat test config -- metricbeat.yml
+      ansible.builtin.debug:
+        msg: "{{ testConfig.stdout }}"
+      when:  testConfig.stdout != "Config OK"
+
+    - name: Restart Metricbeat service
+      ansible.builtin.service:
+        name: metricbeat
+        state: restarted
+

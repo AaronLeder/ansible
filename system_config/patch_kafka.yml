@@ -1,0 +1,149 @@
+---
+
+- name: Patch Kafka Servers
+  order: sorted
+  serial: 1
+  hosts: all
+  any_errors_fatal: true
+  gather_facts: true
+
+  vars:
+    # Top == Stop First --> Bottom == Stop Last
+    serviceStopOrder: 
+      - metricbeat
+      
+      - confluent-control-center
+      - confluent-ksqldb
+
+      - bdp_dns_stream
+      - bluecoat_stream
+      - enrich-pan-stream
+      - parse-vmware-syslog-stream-all
+      - parse_vmware_syslog_stream
+
+      - confluent-kafka-connect-multi
+      - confluent-kafka-connect-syslog001
+      - confluent-kafka-connect-syslog002
+      - confluent-kafka-connect-syslog003
+      
+      - confluent-schema-registry
+      - confluent-server
+      - confluent-zookeeper
+
+    dnfExcludedPackages:
+      - confluent*
+      - beat
+
+  tasks:
+
+    # ========== Check for Available Updates && Skip if NO Updates ========== #
+
+    - name: See what updates are available for installed packages
+      become: true
+      ansible.builtin.dnf:
+        list: updates
+      register: updatesAvailable
+
+    - name: Extract list of packages that start with 'confluent'
+      set_fact:
+        confluentPackages: "{{ updatesAvailable.results | map(attribute='name') | select('search', '^confluent') | list }}"
+    
+    - name: Check if only 'confluent' packages are in the update list
+      set_fact:
+        onlyConfluentUpdates: "{{ updatesAvailable.results | map(attribute='name') | list | difference(confluentPackages) | length == 0 }}"
+    
+    - name: Skip host if only 'confluent' packages are in update list. OK == SKIP && Skipping == Updates Available
+      ansible.builtin.meta: end_host
+      when: onlyConfluentUpdates
+
+
+    # ========== Gather Data && Sort it ========== #
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Extract Running services
+      set_fact:
+        runningServices: "{{ ansible_facts.services | dict2items | selectattr('value.state', 'equalto', 'running') | map(attribute='key') | map('regex_replace', '\\.service$', '')  | list }}"
+
+    - name: Find and sort RUNNING Kafka services
+      delegate_to: localhost
+      set_fact:
+        orderedServices: "{{ serviceStopOrder | select('in', runningServices) | list }}"
+
+
+    # ========== Bring Down Kafka Services ========== #
+    
+    - name: Stop running services in prescribed order
+      become: true
+      ansible.builtin.service:
+        name: "{{ stopKafka | regex_replace('\\.service$', '') }}"
+        state: stopped # Stop running service
+        enabled: false # Not allowed to start on boot
+      loop: "{{ orderedServices }}"
+      loop_control:
+        loop_var: stopKafka
+        pause: 60 # Delay in seconds between each item in the loop
+
+
+    # ========== Patch Hosts && Reboot if Necessary ========== #
+
+    - name: Perform dnf (yum) update -- this may take a while!
+      become: true
+      ansible.builtin.dnf:
+        name: '*'
+        state: latest
+        exclude: "{{ dnfExcludedPackages }}"
+
+    
+    - name: Check if Reboot is required
+      become: true
+      ansible.builtin.command: needs-restarting -r
+      register: reboot_check
+      failed_when: reboot_check.rc not in [0,1]
+      changed_when: reboot_check.rc == 1    
+   
+    - name: Reboot the system if required. I'll check and make sure the host comes back up!
+      become: true
+      ansible.builtin.reboot:
+        msg: "System reboot initiated by Ansible after patching."
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+      when: reboot_check.rc == 1
+
+
+    # ========== Bring Up Kafka Services ========== #
+
+    - name: Sort previously running services to come up in prescribed order
+      ansible.builtin.set_fact:
+        #                         <-- Reverse Original List Above --> 
+        previouslyRunningKafka: "{{ orderedServices | reverse | list}}"
+
+    - name: Start previously running Kafka services
+      become: true
+      ansible.builtin.service:
+        name: "{{ startKafka | regex_replace('\\.service$', '') }}"
+        state: started
+        enabled: true
+      loop: "{{ previouslyRunningKafka }}"
+      loop_control:
+        loop_var: startKafka
+        pause: 60
+
+    - name: Give services a chance to fail 
+      ansible.builtin.pause:
+        prompt: "Check C3, and SSH to the host and make sure services are up!!!"
+        minutes: 2
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Verify previously running services are back up
+      ansible.builtin.assert:
+        that: ansible_facts.services[startKafka + '.service'].state == 'running'
+        fail_msg: "{{ startKafka }} did not start properly!"
+      loop: "{{ previouslyRunningKafka }}"
+      loop_control:
+        loop_var: startKafka
