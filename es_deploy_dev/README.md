@@ -1,8 +1,5 @@
 <<<<<<< HEAD
-# ansible
-ansible playbooks
-
-# Ansible Elastic Stack (from Connor)
+# Deploy ES
 To prepare for deployment:
 1. Prerequisites:
    ```
@@ -26,6 +23,10 @@ To prepare for deployment:
    1. Download Elastic Agent for your version of the Stack
    2. Place the `elastic-agent-<version>.tar.gz` file in the `packages` directory
 7. Run `ansible-playbook main.yml -i inventory.yml --ask-vault-pass` to deploy all configured node types 
+
+This playbook makes some low-level assumptions;
+Debian: You are using `nftables` and assumes the existence of the inet filter input table/chain setup.
+roles > haproxy > tasks > main
 =======
 # Ansible Elastic Stack (from Connor)
 To prepare for deployment:

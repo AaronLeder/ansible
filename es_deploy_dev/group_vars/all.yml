@@ -33,3 +33,10 @@ OI_URL: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-9.0.
 # If you are using the DODIN option, populate the URLs to the .tar.gz below
 DODIN_AppStream: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/appstream/os/"
 DODIN_BaseOS: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/baseos/os/"
+
+# ========== Debian Deployments ========== #
+# Have you preconfigured your Debian environment
+# for inet input filter with nftables?
+# - configured == preconfigured for the right configurations for HAProxy + Elastic
+# - unconfigured  == setup needed
+table_chain: "unconfigured"

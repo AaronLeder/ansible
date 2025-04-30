@@ -9,13 +9,19 @@
     state: present
   become: true
 
-- name: Allow firewall ports (CentOS & RHEL)
-  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
-  ansible.builtin.shell: firewall-cmd --add-port {{ item }} --permanent && firewall-cmd --reload
+# ==================== Firewall ==================== #
+
+- name: Set up Debian table/chain
+  when: ansible_distribution == 'Debian' and table_chain is unconfigured
+  ansible.builtin.include_tasks: debian.yml
+
+- name: Allow firewall ports (Debian with nftables)
+  when: ansible_distribution == 'Debian' and table_chain is configured
+  ansible.builtin.shell: nft add rule inet filter input tcp dport {{ item }} ct state new accept
   loop:
-    - 5601/tcp
-    - 9200/tcp
-    - 8220/tcp
+    - 5601
+    - 9200
+    - 8220
   become: true
   changed_when: false
   ignore_errors: true
@@ -31,20 +37,33 @@
   changed_when: false
   ignore_errors: true
 
-- name: Cleaning out certs dir
+- name: Allow firewall ports (CentOS & RHEL)
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+  ansible.builtin.shell: firewall-cmd --add-port {{ item }} --permanent && firewall-cmd --reload
+  loop:
+    - 5601/tcp
+    - 9200/tcp
+    - 8220/tcp
+  become: true
+  changed_when: false
+  ignore_errors: true
+
+# ==================== Firewall ==================== #
+
+- name: Remove HAProxy Certs directory in case there's anything in it
   ansible.builtin.file:
     path: "/etc/haproxy/certs/"
     state: absent
-  ignore_errors: true
   become: true
+  ignore_errors: true
 
-- name: Create HAProxy Certs Directory
+- name: Create HAProxy Certs directoryectory
   ansible.builtin.file:
     path: /etc/haproxy/certs/
     state: directory
   become: true
 
-- name: Copy Certificates to HAProxy Certs Dir
+- name: Copy Certificates to HAProxy Certs directory
   ansible.builtin.copy:
     src: "certificates/{{ item.src }}"
     dest: /etc/haproxy/certs/{{ item.src }}
@@ -65,14 +84,13 @@
   when: certCopy.changed
 
 - name: Create fullchain cert
-  ansible.builtin.shell:
-    cmd: cat /etc/haproxy/certs/{{ item.src }} >> /etc/haproxy/certs/fullchain.crt
+  when: certCopy.changed
+  ansible.builtin.shell: cat /etc/haproxy/certs/{{ item.src }} >> /etc/haproxy/certs/fullchain.crt
   loop:
     - src: "{{ hostCert }}"
     - src: "{{ hostKey }}"
     - src: "{{ hostCA }}"
   become: true
-  when: certCopy.changed
 
 - name: Template haproxy config
   ansible.builtin.template:
