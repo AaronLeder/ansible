@@ -1,0 +1,114 @@
+---
+# READ ME
+# Minikube start guide
+# https://minikube.sigs.k8s.io/docs/start/?arch=%2Flinux%2Fx86-64%2Fstable%2Fbinary+download
+# Using this playbook, you are assumed to be using
+# OS: Linux
+# Architecture: x86-64
+# Release Type: Stable
+# Installer Type: Binary Download
+
+# Kubectl (K8s CLI tool)
+# https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/
+
+- name: Install and configure Minikube with Docker driver
+  hosts: all
+  become: false
+  gather_facts: false
+  vars:
+    # docker & kvm2 preferred per documentation 05/05/2025
+    # https://minikube.sigs.k8s.io/docs/drivers/
+    # Confirmed Working Options: docker
+    # Options: kvms, virtualbox, qemu, none (bare metal), podman, ssh
+    MK_Driver: "docker"
+    # Put the account name below that the service will be installed on
+    # The account NEEDS a home directory.
+    account: "test"
+    # If you want aliases added to .bashrc
+    # true or false
+    aliases: "true"
+
+  tasks:
+    # ===== Docker setup ===== #
+    - name: docker drivers
+      become: true
+      when: MK_Driver == "docker"
+      block: 
+        - name: Ensure group "docker" exists
+          ansible.builtin.group:
+            name: docker
+            state: present
+    
+        - name: Ensure user/system account is tied to docker group
+          ansible.builtin.user:
+            name: "{{ account }}"
+            groups: docker
+            append: true
+
+    # ===== Aliases ===== #
+    - name: .bashrc aliases
+      become: true
+      when: aliases == "true"
+      block: 
+        - name: Ensure mk alias is in .bashrc
+          become: true
+          become_user: test
+          ansible.builtin.lineinfile:
+            path: /home/test/.bashrc
+            line: "alias mk='minikube'"
+            state: present
+            create: yes
+            insertafter: EOF
+        
+        - name: Ensure k alias is in .bashrc
+          become: true
+          become_user: test
+          ansible.builtin.lineinfile:
+            path: /home/test/.bashrc
+            line: "alias k='kubectl'"
+            state: present
+            create: yes
+            insertafter: EOF
+  
+    - name: Download Minikube binary
+      become: true
+      ansible.builtin.get_url:
+        url: https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+        dest: /tmp/minikube-linux-amd64
+        mode: "0755"
+
+    - name: Install Minikube to /usr/local/bin
+      become: true
+      ansible.builtin.command: install /tmp/minikube-linux-amd64 /usr/local/bin/minikube
+
+    - name: Remove downloaded Minikube binary
+      become: true
+      ansible.builtin.file:
+        path: /tmp/minikube-linux-amd64
+        state: absent
+
+    - name: Set Minikube driver to Docker
+      become: true
+      become_user: "{{ account }}"
+      ansible.builtin.command: minikube config set driver docker
+      environment:
+        HOME: "/home/{{ account }}"
+    
+    - name: Start Minikube with Docker driver
+      become: true
+      become_user: "{{ account }}"
+      ansible.builtin.command: minikube start --driver=docker
+      environment:
+        HOME: "/home/{{ account }}"
+
+    - name: Get Minikube status
+      ansible.builtin.command: minikube status
+      register: MK_Status
+
+    - name: Output Minikube status
+      ansible.builtin.debug:
+        var: MK_Status.stdout_lines
+  
+    - name: Install kubectl on Ubuntu
+      become: true
+      ansible.builtin.shell: snap install kubectl --classic

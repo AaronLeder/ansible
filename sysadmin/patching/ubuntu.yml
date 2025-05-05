@@ -1,0 +1,22 @@
+---
+- name: Update and upgrade all Ubuntu/Debian systems
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update APT package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600  # Optional: only updates if older than 1 hour
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes  # Optional: remove unused packages
+
+    - name: Reboot if kernel was upgraded
+      reboot:
+        reboot_timeout: 600
+      when: ansible_facts.packages['linux-image-generic'] is defined
+
