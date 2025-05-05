@@ -1,0 +1,79 @@
+---
+
+# ================== READ ME ================== #
+
+# Change hosts to correct host!
+
+# ================== READ ME ================== #
+
+- name: Set up Ansible configuration
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Create /etc/ansible directory
+      file:
+        path: /etc/ansible
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create empty inventory file
+      copy:
+        content: ''
+        dest: /etc/ansible/hosts
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Deploy ansible.cfg with configuration
+      copy:
+        dest: /etc/ansible/ansible.cfg
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [defaults]
+          #roles_path = roles/
+          #inventory = ../all_hosts.yml
+          retry_files_enabled = False
+          gathering = smart
+          command_warnings = False
+          forks = 25
+          ansible_managed = "This file is managed by ansible, don't make changes here - they will be overwritten."
+          hash_behaviour = merge
+          host_key_checking = false
+          log_path = ./files/logs/logfile.log
+          ANSIBLE_DEBUG = True
+          timeout = 1000
+          fact_caching = jsonfile
+          fact_caching_connection = ./files/gatheredfacts
+          # Two hours timeout
+          fact_caching_timeout = 7200
+
+          [privilege_escalation]
+
+          [ssh_connection]
+          ssh_args = -o ControlMaster=auto -o ControlPersist=18000 -o PreferredAuthentications=publickey
+          pipelining = True
+
+          [colors]
+          changed=yellow
+          debug=bright red
+          deprecate=purple
+          diff_add=green
+          diff_lines=cyan
+          diff_remove=red
+          error=red
+          highlight=white
+          ok=green
+          skip=cyan
+          unreachable=red
+          verbose=yellow
+          warn=bright yellow
+
+    - name: Explicitly export and override ansible.cfg
+      command: export ANSIBLE_CONFIG=/etc/ansible/ansible.cfg
+
