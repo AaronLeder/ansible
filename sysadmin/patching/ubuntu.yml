@@ -1,6 +1,8 @@
 ---
 - name: Update and upgrade all Ubuntu/Debian systems
   hosts: all
+  order: sorted
+  serial: 1
   become: true
   gather_facts: true
 
@@ -20,3 +22,20 @@
         reboot_timeout: 600
       when: ansible_facts.packages['linux-image-generic'] is defined
 
+      # Ensure zypper is installed, or this won't work!
+    - name: Check if Reboot is required
+      become: true
+      ansible.builtin.command: needs-restarting -r
+      register: reboot_check
+      failed_when: reboot_check.rc not in [0,1]
+      changed_when: reboot_check.rc == 1    
+
+    - name: Reboot the system if required. I'll check and make sure the host comes back up!
+      become: true
+      ansible.builtin.reboot:
+        msg: "System reboot initiated by Ansible after patching."
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+      when: reboot_check.rc == 1

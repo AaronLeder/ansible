@@ -1,0 +1,38 @@
+---
+# ================== READ ME ================== #
+
+# I have only ever tried this on RHEL 7 & 8.
+# I don't know if it works on other OS.
+
+# `gather_facts: true` is because we need to check
+# the status of SELinux.
+
+# running `restorecon` is best practice when
+# working in an environment with SELinux 
+
+# ================== READ ME ================== #
+
+- name: Configure ifup-local script for eno6 tuning
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    # Name of your NIC interface
+    NIC_Name: "eno6"
+
+  tasks:
+    - name: Write /etc/NetworkManager/dispatch.d/ifup-local script
+      ansible.builtin.copy:
+        dest: /etc/NetworkManager/dispatch.d/ifup-local
+        content: |
+          if [ "$1" == "{{ NIC_Name }}" ]; then
+            /sbin/ethtool -G eno6 rx 4096 tx 2048
+          fi
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Restore SELinux context on ifup-local
+      ansible.builtin.command: restorecon -v /etc/NetworkManager/dispatch.d/ifup-local
+      when: ansible_selinux.status == "enabled"
+
