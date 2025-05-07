@@ -48,7 +48,7 @@
     # ===== Aliases ===== #
     - name: .bashrc aliases
       become: true
-      when: aliases == "true"
+      when: aliases == "true" and inventory_hostname in groups['control_plane']
       block: 
         - name: Ensure mk alias is in .bashrc
           become: true
@@ -100,6 +100,22 @@
       ansible.builtin.command: minikube start --driver=docker
       environment:
         HOME: "/home/{{ account }}"
+
+    - name: Enable metrics-server
+      become_user: "{{ account }}"
+      ansible.builtin.command: minikube addons enable metrics-server
+
+    - name: Launch the web dashboard
+      ansible.builtin.command: nohup minikube dashboard --url > ~/minikube-url.txt 2>&1 &
+    
+    - name: get dashboard url
+      ansible.builtin.command: tail -n 1 ~/minikube-url.txt
+      register: MK_URL
+      
+      # Put this at the end
+#    - name: output Minikube URL
+#      ansible.builtin.debug:
+#        var: MK_URL.stdout_lines
 
     - name: Get Minikube status
       ansible.builtin.command: minikube status

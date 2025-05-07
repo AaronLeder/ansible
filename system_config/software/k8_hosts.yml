@@ -1,5 +1,7 @@
 all:
   vars:
+
+workers:
   hosts:
     ubuntu1:
       ansible_host: 192.168.100.29
@@ -9,4 +11,8 @@ all:
       ansible_host: 192.168.100.14
     ubuntu4:
       ansible_host: 192.168.100.235
+    
+control_plane:
+  hosts: 
     localhost:
+      ansible_host: 192.168.100.221
