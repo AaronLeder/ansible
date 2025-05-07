@@ -24,9 +24,11 @@
     # Put the account name below that the service will be installed on
     # The account NEEDS a home directory.
     account: "test"
-    # If you want aliases added to .bashrc
+    # If you want aliases added to .bashrc, adds:
+    # alias mk='minikube'
+    # alias k='kubectl'
     # true or false
-    aliases: "true"
+    aliases: "false"
 
   tasks:
     # ===== Docker setup ===== #
