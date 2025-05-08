@@ -12,11 +12,11 @@
 # ==================== Firewall ==================== #
 
 - name: Set up Debian table/chain
-  when: ansible_distribution == 'Debian' and table_chain is unconfigured
+  when: ansible_distribution == 'Debian' and tableChain is unconfigured
   ansible.builtin.include_tasks: debian.yml
 
 - name: Allow firewall ports (Debian with nftables)
-  when: ansible_distribution == 'Debian' and table_chain is configured
+  when: ansible_distribution == 'Debian' and tableChain is configured
   ansible.builtin.shell: nft add rule inet filter input tcp dport {{ item }} ct state new accept
   loop:
     - 5601

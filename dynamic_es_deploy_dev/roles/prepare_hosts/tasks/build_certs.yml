@@ -1,0 +1,46 @@
+- name: Generate CA key
+  ansible.builtin.command:
+    cmd: "openssl genrsa -out ./certificates/ca.key 2048"
+    creates: "./certificates/ca.key"
+  run_once: true
+  delegate_to: localhost
+
+- name: Generate CA certificates
+  ansible.builtin.command:
+    cmd: "openssl req -x509 -new -nodes -key ./certificates/ca.key -sha256 -days 1000 -out ./certificates/ca.crt -subj '/C=US/ST=Atropia/L=Krasnovia/O=Self/OU=Self/CN=Ansible Generated CA'"
+    creates: "./certificates/ca.crt"
+  run_once: true
+  delegate_to: localhost
+
+- name: Generate private keys
+  ansible.builtin.command:
+    # cmd: "openssl genrsa -out ./certificates/{{ inventory_hostname }}.key 2048"
+    cmd: "openssl ecparam -name secp384r1 -genkey -noout -out ./certificates/{{ inventory_hostname }}.key"
+    creates: ./certificates/{{ inventory_hostname }}.key
+  delegate_to: localhost
+
+- name: Generate CSR Configs
+  template:
+    src: templates/server.csr
+    dest: "./certificates/{{ inventory_hostname }}.csr.conf"
+  delegate_to: localhost
+  register: csrConfig
+
+- name: Generate CSRs
+  ansible.builtin.command:
+    cmd: "openssl req -new -key ./certificates/{{ inventory_hostname }}.key -out ./certificates/{{ inventory_hostname }}.csr -config ./certificates/{{ inventory_hostname }}.csr.conf"
+  delegate_to: localhost
+  when: csrConfig.changed
+
+- name: Generate Cert Configs
+  template:
+    src: templates/cert.conf
+    dest: "./certificates/{{ inventory_hostname }}.crt.conf"
+  delegate_to: localhost
+  register: certConfig
+
+- name: Sign CSRs
+  ansible.builtin.command:
+    cmd: "openssl x509 -req -in ./certificates/{{ inventory_hostname }}.csr -CA ./certificates/ca.crt -CAkey ./certificates/ca.key -out ./certificates/{{ inventory_hostname }}.crt -days 1000 -sha256 -extfile ./certificates/{{ inventory_hostname }}.crt.conf"
+  delegate_to: localhost
+  when: certConfig.changed

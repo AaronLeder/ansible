@@ -36,7 +36,7 @@
 
 
 
-# Uncomment the tasks below to use DISA repos if on a DODIN network
+# Uncomment the tasks below to use DISA repos, if on a DODIN network
 # - name: Add DISA Repos
 #   ansible.builtin.yum_repository:
 #     name: "{{ item.name }}"
@@ -50,10 +50,10 @@
 #   loop:
 #     - name: "disa_appstream"
 #       description: "DISA 8 - AppStream"
-#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/appstream/os/"
+#       baseurl: "{{ DODIN_AppStream }}"
 #     - name: "disa_baseos"
 #       description: "DISA 8 - BaseOS"
-#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/baseos/os/"
+#       baseurl: "{{ DODIN_BaseOS }}"
 #
 # - name: Add DoD Root for proxy trust
 #   copy:
