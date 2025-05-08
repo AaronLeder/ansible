@@ -1,0 +1,15 @@
+# Module: kibana
+# Docs: https://www.elastic.co/guide/en/beats/metricbeat/master/metricbeat-module-kibana.html
+
+- module: kibana
+  metricsets:
+   - status
+   - stats
+  period: 10s
+  hosts: ["https://{{ inventory_hostname }}:5601"]
+  xpack.enabled: true
+ # basepath: ""
+  username: "remote_monitoring_user"
+  password: "${monitor_password}"
+  ssl.certificate_authorities: ["/etc/metricbeat/certs/{{ hostCA }}"] 
+  ssl.verification_mode: certificate

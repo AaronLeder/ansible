@@ -1,0 +1,137 @@
+---
+- name: Create Kibana account
+  block:
+    - name: Update kibana_system Password
+      ansible.builtin.uri:
+        url: "{{ esAPI }}/_security/user/kibana_system/_password"
+        method: POST
+        body_format: json
+        body: >
+          {
+            "password": "{{ kibanaPassword }}"
+          }
+        status_code:
+          - 200
+          - 201
+          - 204
+        user: elastic
+        password: "{{ elasticPassword }}"
+        validate_certs: false
+        force_basic_auth: true
+      run_once: true
+      delegate_to: localhost
+  when: kibanaPassword
+
+- name: Create Logstash account
+  block:
+    - name: Create logstash_writer role
+      ansible.builtin.uri:
+        url: "{{ esAPI }}/_security/role/logstash_writer"
+        method: POST
+        body_format: json
+        body: >
+          {
+            "cluster": ["manage_index_templates", "monitor", "manage_ilm", "manage_ml"], 
+            "indices": [
+              {
+                "names": [ "logstash-*", "winlogbeat-*", "filebeat-*", "auditbeat-*", "metricbeat-*", "packetbeat-*", "journalbeat-*", ".monitoring-*", "alert-*", ".siem*", "logs-*"], 
+                "privileges": ["auto_configure","write","create","create_doc","delete","create_index","manage","read"]
+              }
+            ]
+          } 
+        status_code:
+          - 200
+          - 201
+          - 204
+        user: elastic
+        password: "{{ elasticPassword }}"
+        validate_certs: false
+        force_basic_auth: true
+      run_once: true
+      delegate_to: localhost
+
+    - name: Create logstash_internal user
+      ansible.builtin.uri:
+        url: "{{ esAPI }}/_security/user/logstash_internal"
+        method: POST
+        body_format: json
+        body: >
+          {
+            "password" : "{{ logstashPassword }}",
+            "roles" : ["logstash_admin", "logstash_writer", "ingest_admin", "machine_learning_admin", "kibana_admin", "remote_monitoring_collector", "remote_monitoring_agent"],
+            "full_name" : "Internal Logstash User"
+          }
+        status_code:
+          - 200
+          - 201
+          - 204
+        user: elastic
+        password: "{{ elasticPassword }}"
+        validate_certs: false
+        force_basic_auth: true
+      run_once: true
+      delegate_to: localhost
+  when: logstashPassword
+
+- name: Update remote_monitoring_user password
+  ansible.builtin.uri:
+    url: "{{ esAPI }}/_security/user/remote_monitoring_user/_password"
+    method: POST
+    body_format: json
+    body: >
+      {
+        "password" : "{{ monitorPassword }}"
+      }
+    status_code:
+      - 200
+      - 201
+      - 204
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+  run_once: true
+  delegate_to: localhost
+
+- name: Update beats_system password
+  ansible.builtin.uri:
+    url: "{{ esAPI }}/_security/user/beats_system/_password"
+    method: POST
+    body_format: json
+    body: >
+      {
+        "password" : "{{ beatsPassword }}"
+      }
+    status_code:
+      - 200
+      - 201
+      - 204
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+  run_once: true
+  delegate_to: localhost
+
+
+- name: Create beats_ingest user
+  ansible.builtin.uri:
+    url: "{{ esAPI }}/_security/user/beats_ingest"
+    method: POST
+    body_format: json
+    body: >
+      {
+        "password" : "{{ beatsPassword }}",
+        "roles" : ["beats_admin", "beats_system", "monitoring_user", "ingest_admin", "remote_monitoring_agent", "logstash_writer"],
+        "full_name" : "Beats Ingest User"
+      }
+    status_code:
+      - 200
+      - 201
+      - 204
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+  run_once: true
+  delegate_to: localhost

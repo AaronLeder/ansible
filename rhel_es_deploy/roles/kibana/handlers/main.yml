@@ -1,0 +1,59 @@
+---
+- name: Remove Kibana Keystore
+  ansible.builtin.file:
+    path: /etc/kibana/kibana.keystore
+    state: absent
+  become: true
+  listen: Rebuild Keystore
+
+- name: Create the kibana Keystore
+  command: "/usr/share/kibana/bin/kibana-keystore create"
+  args:
+    creates: "/etc/kibana/kibana.keystore"
+  become: true
+  listen: Rebuild Keystore
+
+- name: Add ES Password to Keystore
+  command: /usr/share/kibana/bin/kibana-keystore add -x -f elasticsearch.password
+  no_log: true
+  args:
+    stdin: "{{ kibanaPassword }}"
+  notify: Restart Kibana
+  become: true
+  listen: Rebuild Keystore
+
+- name: Set keystore ownership
+  ansible.builtin.file:
+    path: /etc/kibana/kibana.keystore
+    group: kibana
+    mode: 0670
+  become: true
+  listen: Rebuild Keystore
+
+- name: Restart Kibana
+  ansible.builtin.service:
+    name: kibana
+    state: restarted
+  become: true
+  listen: 
+    - Restart Kibana
+    - Rebuild Keystore
+
+- name: Wait for Kibana to Become Ready
+  uri:
+    url: "https://{{ inventory_hostname }}:5601/api/kibana/settings"
+    status_code: 200
+    return_content: true
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 1
+  listen:
+    - Restart Kibana
+    - Start Kibana
+    - Rebuild Keystore
+  delegate_to: localhost

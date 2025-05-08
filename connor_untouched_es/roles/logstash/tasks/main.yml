@@ -1,0 +1,155 @@
+---
+- name: Get cluster UUID
+  ansible.builtin.uri:
+    url: "{{ esAPI }}"
+    method: GET
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+  run_once: true
+  delegate_to: localhost
+  register: clusterUUIDGET
+  no_log: true
+
+- name: Include pipeline list vars
+  ansible.builtin.include_vars:
+    file: "templates/pipelines.yml"
+    name: availablePipelines
+
+- name: Add Elasticsearch Repo
+  ansible.builtin.yum_repository:
+    name: elasticsearch-8.x
+    baseurl:
+      - "{{ esRepoPath | default('https://artifacts.elastic.co/packages/8.x/yum') }}"
+    gpgcheck: 0
+    enabled: 1
+    priority: 1
+    description: "Elasticsearch 8.x repo"
+  become: true
+
+- name: Install Logstash
+  ansible.builtin.package:
+    name: logstash-{{ esVersion }}
+    state: present
+  become: true
+
+- name: Make certs directory
+  ansible.builtin.file:
+    path: /etc/logstash/certs/
+    state: directory
+    mode: 0750
+    group: logstash
+  become: true
+
+- name: Copy Certificates to Logstash Conf Dir
+  ansible.builtin.copy:
+    src: "certificates/{{ item.src }}"
+    dest: /etc/logstash/certs/{{ item.dest | default(item.src) }}
+    group: logstash
+    mode: 0640
+  loop:
+    - src: "{{ hostCert }}"
+    - src: "{{ hostKey }}"
+    - src: "{{ hostCA }}"
+  notify: Restart Logstash
+  become: true
+  register: certsCopied
+
+- name: Template Logstash Config
+  ansible.builtin.template:
+    src: templates/logstash.yml.j2
+    dest: /etc/logstash/logstash.yml
+  notify: Restart Logstash
+  become: true
+
+- name: Create password hash for consistency check
+  ansible.builtin.lineinfile:
+    path: /etc/logstash/keystore.hash
+    line: "{{ item.name }}:{{ item.pass | password_hash('sha256', 65534 | random(seed=inventory_hostname) | string ) }}"
+    regexp: ^{{ item.name }}.*
+    state: present
+    mode: 0600
+    owner: root
+    group: root
+    create: true
+  loop:
+    - name: es_pass
+      pass: "{{ logstashPassword }}"
+  become: true
+  no_log: true
+  register: lsHashChange
+
+- name: Configure Logstash Keystore
+  block:
+
+    - name: Add Keystore Password to LS environment
+      ansible.builtin.copy:
+        content: "LOGSTASH_KEYSTORE_PASS={{ logstashPassword }}"
+        dest: /etc/sysconfig/logstash
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Restart Logstash
+      become: true
+
+    - name: Remove Keystore
+      ansible.builtin.file:
+        path: /etc/logstash/logstash.keystore
+        state: absent
+
+    - name: Create the Logstash Keystore
+      command: /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash create
+      args:
+        creates: "/etc/logstash/logstash.keystore"
+
+    - name: Add ES Password to Keystore
+      command: /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash add es_pass
+      no_log: false
+      args:
+        stdin: "{{ logstashPassword }}"
+        stdin_add_newline: false
+      notify: Restart Logstash
+
+  environment:
+    LOGSTASH_KEYSTORE_PASS: "{{ logstashPassword }}"
+  become: true
+  when: lsHashChange.changed
+
+- name: Allow Firewall Ports
+  ansible.builtin.shell: "firewall-cmd --add-port {{ item }} --permanent && firewall-cmd --reload"
+  loop:
+    - 5044/tcp
+  become: true
+  changed_when: false
+
+- name: Import Logstash Pipelines to Kibana
+  uri:
+    url: "https://{{ groups['kibana'][0] }}:5601/api/logstash/pipeline/{{ item.name }}"
+    status_code:
+      - 200
+      - 201
+      - 204
+    method: PUT
+    body_format: json
+    validate_certs: false
+    body:
+      description: "{{ item.description | default(item.name) }}"
+      pipeline: "{{ lookup('template', 'templates/pipelines/{{ item.name }}.yml.j2') }}"
+      settings:
+        pipeline.batch.size: "{{ item.batch_size | default(125) }}"
+        pipeline.batch.delay: "{{ item.batch_delay | default(50) }}"
+        pipeline.workers: "{{ item.workers | default(2) }}"
+        queue.type: "{{ item.queue_type | default('memory') }}"
+        queue.max_bytes: "{{ item.queue_maxbytes | default('1gb') }}"
+        queue.checkpoint.writes: "{{ item.queue_checkpoint | default(1024) }}"
+    user: elastic
+    password: "{{ elasticPassword }}"
+    force_basic_auth: true
+    follow_redirects: all
+    headers:
+      kbn-xsrf: true
+      Content-Type: application/json
+  loop: "{{ availablePipelines.pipelinesList }}"
+  delegate_to: localhost
+  run_once: true

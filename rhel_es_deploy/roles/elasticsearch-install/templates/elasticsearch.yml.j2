@@ -1,0 +1,144 @@
+# ======================== Elasticsearch Configuration =========================
+#
+# NOTE: Elasticsearch comes with reasonable defaults for most settings.
+#       Before you set out to tweak and tune the configuration, make sure you
+#       understand what are you trying to accomplish and the consequences.
+#
+# The primary way of configuring a node is via this file. This template lists
+# the most important settings you may want to configure for a production cluster.
+#
+# Please consult the documentation for further information on configuration options:
+# https://www.elastic.co/guide/en/elasticsearch/reference/index.html
+#
+# ---------------------------------- Cluster -----------------------------------
+#
+# Use a descriptive name for your cluster:
+#
+cluster.name: {{ clusterName }}
+#
+# ------------------------------------ Node ------------------------------------
+#
+# Use a descriptive name for the node:
+node.name: {{ inventory_hostname }}
+{% for config in configList.elasticsearchConfigs %}
+{% if config.hosts is defined %}
+{% if inventory_hostname in config.hosts %}
+node.roles: {{ config.roles }}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+#
+# Add custom attributes to the node:
+#
+#node.attr.rack: r1
+#
+# Adding Deploy Context node attribute to support shard allocation 
+#node.attr.deployContext:
+#
+# ----------------------------------- Paths ------------------------------------
+#
+# Path to directory where to store the data (separate multiple locations by comma):
+#
+
+{% for config in configList.elasticsearchConfigs %}
+{% if inventory_hostname in config.hosts and ( config.roles | regex_search('data*')) %}
+path.data: {{ pathData }}
+{% elif inventory_hostname in config.hosts and not ( config.roles | regex_search('data*')) %}
+path.data: "/var/lib/elasticsearch"
+{% endif %}
+{% endfor %}
+
+# Add path for snapshot repo
+# path.repo: "/mnt/nfs_share"
+#
+# Path to log files:
+#
+path.logs: /var/log/elasticsearch
+#
+# ----------------------------------- Memory -----------------------------------
+#
+# Lock the memory on startup:
+#
+bootstrap.memory_lock: true
+#
+# Make sure that the heap size is set to about half the memory available
+# on the system and that the owner of the process is allowed to use this
+# limit.
+#
+# Elasticsearch performs poorly when the system is swapping the memory.
+#
+# ---------------------------------- Network -----------------------------------
+#
+# Set the bind address to a specific IP (IPv4 or IPv6):
+#
+network.host: 0.0.0.0
+#
+# Set a custom port for HTTP:
+#
+#http.port: 9200
+#
+# For more information, consult the network module documentation.
+#
+# --------------------------------- Discovery ----------------------------------
+# Pass an initial list of hosts to perform discovery when this node is started:
+# The default list of hosts is ["127.0.0.1", "[::1]"]
+{% set ns = namespace(found=false) %}
+{% for config in configList.elasticsearchConfigs %}
+{% if config.hosts is defined %}
+{% if inventory_hostname in config.hosts %}
+{% if groups['elasticsearch']|count>1 %}
+{% set ns.found = true %}
+# Set the initial set of nodes for discovery from the Elasticsearch group
+discovery.seed_hosts:
+{% for host in groups['elasticsearch'] %}
+  - {{ host }}
+{% endfor %}
+{% for item in configList.elasticsearchConfigs if "master" in item.roles and "voting_only" not in item.roles %}
+# Bootstrap the cluster using an initial set of master-eligible nodes:
+cluster.initial_master_nodes: {{ item.hosts }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if not ns.found %}
+discovery.type: single-node
+{% endif %}
+
+# Set a custom endpoint for GeoIP database downloads
+# ingest.geoip.downloader.endpoint: "http://localhost:8081/overview.json"
+
+# For more information, consult the discovery and cluster formation module documentation.
+#
+# ---------------------------------- Gateway -----------------------------------
+#
+# Block initial recovery after a full cluster restart until N nodes are started:
+#
+#gateway.recover_after_nodes: 3
+#
+# For more information, consult the gateway module documentation.
+#
+# ---------------------------------- Various -----------------------------------
+#
+# Require explicit names when deleting indices:
+#
+#action.destructive_requires_name: true
+http.compression: true
+http.compression_level: 9
+xpack.security.audit.enabled: true
+xpack.security.audit.logfile.events.include: ["access_denied", "anonymous_access_denied", "authentication_failed", "connection_denied", "tampered_request", "run_as_denied", "run_as_granted", "security_config_change"]
+xpack.security.enabled: true
+xpack.security.http.ssl.enabled: true
+xpack.license.self_generated.type: trial
+xpack.security.http.ssl.supported_protocols: ["TLSv1.2"]
+xpack.security.http.ssl.verification_mode: certificate
+xpack.security.http.ssl.key:  certs/{{ hostKey }}
+xpack.security.http.ssl.certificate: certs/{{ hostCert }}
+xpack.security.http.ssl.certificate_authorities: [ "certs/{{ hostCA }}" ]
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.verification_mode: certificate
+xpack.security.transport.ssl.key:  certs/{{ hostKey }}
+xpack.security.transport.ssl.certificate: certs/{{ hostCert }}
+xpack.security.transport.ssl.certificate_authorities: [ "certs/{{ hostCA }}" ]
+xpack.monitoring.collection.enabled: false

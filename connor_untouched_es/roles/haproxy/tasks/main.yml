@@ -1,0 +1,63 @@
+- name: Include Elasticsearch Vars
+  ansible.builtin.include_vars:
+    file: group_vars/{{ esEnvironment }}-elasticsearch_cluster.yml
+    name: configList
+    
+- name: Install haproxy
+  ansible.builtin.package:
+    name: haproxy
+    state: present
+  become: true
+
+- name: Allow firewall ports
+  ansible.builtin.shell: firewall-cmd --add-port {{ item }} --permanent && firewall-cmd --reload
+  loop:
+    - 5601/tcp
+    - 9200/tcp
+    - 8220/tcp
+  become: true
+  changed_when: false
+  ignore_errors: true
+
+- name: Create HAProxy Certs Directory
+  ansible.builtin.file:
+    path: /etc/haproxy/certs/
+    state: directory
+  become: true
+
+- name: Copy Certificates to HAProxy Certs Dir
+  copy:
+    src: "certificates/{{ item.src }}"
+    dest: /etc/haproxy/certs/{{ item.src }}
+    group: root
+    mode: 0640
+  loop:
+    - src: "{{ hostCert }}"
+    - src: "{{ hostKey }}"
+    - src: "{{ hostCA }}"
+  become: true
+  register: certCopy
+
+- name: Remove fullchain cert if exists
+  file:
+    path: /etc/haproxy/certs/fullchain.crt
+    state: absent
+  become: true
+  when: certCopy.changed
+
+- name: Create fullchain cert
+  shell:
+    cmd: cat /etc/haproxy/certs/{{ item.src }} >> /etc/haproxy/certs/fullchain.crt
+  loop:
+    - src: "{{ hostCert }}"
+    - src: "{{ hostKey }}"
+    - src: "{{ hostCA }}"
+  become: true
+  when: certCopy.changed
+
+- name: Template haproxy config
+  ansible.builtin.template:
+    src: templates/haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg.new
+  become: true
+  notify: Check New Config

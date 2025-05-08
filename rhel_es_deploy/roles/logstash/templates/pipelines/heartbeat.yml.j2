@@ -1,0 +1,19 @@
+input {
+  heartbeat {
+    interval => 15
+    message  => 'Hello from Logstash 💓'
+  }
+}
+
+output {
+  elasticsearch {
+    hosts     => [{% for host in groups['haproxy'] %}
+'https://{{ host }}:9202'
+{%- if not loop.last %}, {% endif %}
+{% endfor %}]
+    user      => 'logstash_internal'
+    password  => "${es_pass}"  # read password from logstash.keystore
+    ssl       => true
+    cacert    => '/etc/logstash/certs/{{ hostCA }}'
+  }
+}

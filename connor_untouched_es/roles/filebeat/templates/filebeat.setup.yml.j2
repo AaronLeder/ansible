@@ -1,0 +1,33 @@
+---
+keystore.path: "${path.config}/filebeat.keystore"
+
+# Add modules path config to prevent setup error
+filebeat.config.modules:
+  # Glob pattern for configuration loading
+  path: ${path.config}/modules.d/*.yml
+
+
+# Commented out as these will be executed on a per setup basis and values will change
+#setup.ilm.overwrite: false
+#setup.template.overwrite: false
+#setup.template.settings:
+#  index.auto_expand_replicas: 0-1
+#  index.number_of_shards: 1
+#  index.lifecycle.name: default-ilm
+
+setup.kibana:
+  host: "https://{{ groups['kibana'][0] }}:5601"
+  ssl.enabled: true
+  ssl.certificate_authorities: ["/etc/filebeat/certs/{{ hostCA }}"] 
+  ssl.certificate: "/etc/filebeat/certs/{{ hostCert }}" 
+  ssl.key: "/etc/filebeat/certs/{{ hostKey }}"
+
+output.elasticsearch:
+  # Array of hosts to connect to
+  hosts: ["{{ esAPI }}"]
+  protocol: "https"
+  ssl.certificate_authorities: ["/etc/filebeat/certs/{{ hostCA }}"] 
+  ssl.certificate: "/etc/filebeat/certs/{{ hostCert }}" 
+  ssl.key: "/etc/filebeat/certs/{{ hostKey }}"
+  username: "elastic"
+  password: "${elastic_password}"

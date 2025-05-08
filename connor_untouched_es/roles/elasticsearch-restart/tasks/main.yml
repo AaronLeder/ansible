@@ -1,0 +1,41 @@
+---
+- name: Check for living cluster
+  ansible.builtin.uri:
+    url: "{{ esAPI }}/_cluster/health"
+    method: GET
+    user: elastic
+    password: "{{ elasticPassword }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code:
+      - -1
+      - 401
+      - 200
+      - 503
+  register: liveCheck
+
+- name: Restart Elasticsearch Service
+  ansible.builtin.service:
+    name: elasticsearch
+    state: restarted
+    enabled: true
+  become: true
+
+- name: Wait for Elasticsearch to Become Ready
+  ansible.builtin.wait_for:
+    host: "{{ inventory_hostname }}"
+    port: 9200
+
+- name: Wait for cluster to become healthy
+  ansible.builtin.uri:
+    url: https://{{ inventory_hostname | lower }}:9200/_cluster/health?wait_for_status=yellow&timeout=120s
+    method: GET
+    user: elastic
+    password: "{{ elasticPassword }}"
+    force_basic_auth: true
+    validate_certs: false
+  register: esResult
+  until: esResult.status == 200
+  retries: 60
+  delay: 1
+  when: liveCheck.status == 200 and rollingRestart is true

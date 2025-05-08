@@ -1,3 +1,4 @@
+# Recommended to use FQDN.
 all:
   vars:
     # Cluster name for Elasticsearch
@@ -33,24 +34,6 @@ kibana:
 logstash:
   hosts:
     ubuntu4:
-
-#filebeat:
-#  children:
-#    elasticsearch:
-#      vars:
-#        filebeatModules: ["elasticsearch"]
-#    kibana:
-#      vars:
-#        filebeatModules: ["kibana"]
-#
-#metricbeat:
-#  children:
-#    elasticsearch:
-#      vars:
-#        metricbeatModules: ["elasticsearch"]
-#    kibana:
-#      vars:
-#        metricbeatModules: ["kibana"]
 
 haproxy:
   hosts:

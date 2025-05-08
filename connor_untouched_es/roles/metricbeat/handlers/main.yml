@@ -1,0 +1,53 @@
+---
+- name: Restart Metricbeat
+  ansible.builtin.service:
+    name: metricbeat
+    state: restarted
+    enabled: true
+  become: true
+
+- name: Remove Metricbeat Keystore
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  become: true
+  loop: 
+    - /var/lib/metricbeat/metricbeat.keystore
+    - /etc/metricbeat/metricbeat.keystore
+  listen: Rebuild Keystore
+
+- name: Create the Metricbeat Keystore
+  command: metricbeat keystore create
+  args:
+    chdir: /usr/share/metricbeat/bin/
+    creates: /var/lib/metricbeat/metricbeat.keystore
+  become: true
+  listen: Rebuild Keystore
+
+- name: Add Setup Password to Keystore
+  command: metricbeat keystore add --force --stdin {{ item.name }}
+  args:
+    chdir: /usr/share/metricbeat/bin/
+    stdin: "{{ item.pass }}"
+  no_log: true
+  loop:
+    - name: monitor_password
+      pass: "{{ monitorPassword }}"
+    - name: beats_password
+      pass: "{{ beatsPassword }}"
+    - name: elastic_password
+      pass: "{{ elasticPassword }}"
+  notify: Restart Metricbeat
+  become: true
+  listen: Rebuild Keystore
+
+- name: Copy Metricbeat keystore to /etc/metricbeat
+  ansible.builtin.copy:
+    src: /var/lib/metricbeat/metricbeat.keystore
+    dest: /etc/metricbeat/metricbeat.keystore
+    mode: 0600
+    owner: root
+    group: root
+    remote_src: true
+  become: true
+  listen: Rebuild Keystore

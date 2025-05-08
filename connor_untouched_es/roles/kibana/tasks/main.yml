@@ -1,0 +1,165 @@
+---
+- name: Include Elasticsearch Vars
+  ansible.builtin.include_vars:
+    file: group_vars/{{ esEnvironment }}-elasticsearch_cluster.yml
+    name: configList
+
+- name: RHEL Install
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+  block:
+    - name: Add Elasticsearch Repo (RHEL)
+      ansible.builtin.yum_repository:
+        name: elasticsearch-8.x
+        baseurl:
+          - "{{ esRepoPath | default('https://artifacts.elastic.co/packages/8.x/yum') }}"
+        gpgcheck: 0
+        enabled: 1
+        priority: 1
+        description: "Elasticsearch 8.x repo"
+      register: esPackage
+      become: true
+
+    - name: Install Kibana
+      ansible.builtin.package:
+        name: kibana-{{ esVersion }}
+        state: present
+      become: true
+      notify: Restart Kibana
+
+    - name: Add Kibana port
+      ansible.builtin.shell: firewall-cmd --add-port 5601/tcp --permanent && firewall-cmd --reload
+      become: true
+      changed_when: false
+
+- name: Debian Install
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+  block:
+    - name: Install prerequisite packages (Debian)
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - gpg
+        - apt-transport-https
+      become: true
+
+    - name: Add Elasticsearch GPG (Debian)
+      ansible.builtin.shell:
+        cmd: "wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg"
+        creates: /usr/share/keyrings/elasticsearch-keyring.gpg
+      become: true
+
+    - name: Add Elasticsearch Repo (Debian)
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main"
+        filename: "/etc/apt/sources.list.d/elastic-8.x"
+        state: present
+      become: true
+
+    - name: Install Kibana
+      ansible.builtin.package:
+        name: kibana={{ esVersion }}
+        state: present
+      become: true
+      notify: Restart Kibana
+
+- name: Make certs directory
+  ansible.builtin.file:
+    path: /etc/kibana/certs/
+    state: directory
+    mode: 0750
+    group: kibana
+  become: true
+
+- name: Copy Certificates to Kibana Conf Dir
+  copy:
+    src: "certificates/{{ item.src }}"
+    dest: /etc/kibana/certs/{{ item.dest | default(item.src) }}
+    group: kibana
+    mode: 0640
+  loop:
+    - src: "{{ hostCert }}"
+    - src: "{{ hostKey }}"
+    - src: "{{ hostCA }}"
+  notify: Restart Kibana
+  become: true
+
+- name: Template Kibana Config
+  template:
+    src: templates/kibana.yml.j2
+    dest: /etc/kibana/kibana.yml
+  notify: Restart Kibana
+  become: true
+
+- name: Create password hash for consistency check
+  ansible.builtin.lineinfile:
+    path: /etc/kibana/keystore.hash
+    line: "{{ item.name }}:{{ item.pass | password_hash('sha256', 65534 | random(seed=inventory_hostname) | string ) }}"
+    regexp: ^{{ item.name }}.*
+    state: present
+    mode: 0600
+    owner: root
+    group: root
+    create: true
+  loop:
+    - name: elasticsearch.password
+      pass: "{{ kibanaPassword }}"
+  become: true
+  no_log: true
+  notify: Rebuild Keystore
+
+- name: Flush Handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Set ownership of directory
+  ansible.builtin.file:
+    path: /etc/kibana/
+    mode: 0770
+  become: true
+
+- name: Update default route
+  ansible.builtin.uri:
+    url: https://{{ inventory_hostname }}:5601/api/kibana/settings
+    method: POST
+    body_format: json
+    body: >
+      {
+        "changes": {
+          "defaultRoute":"/app/dashboards"
+        }
+      }
+    status_code:
+      - 200
+      - 201
+      - 204
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: true
+  run_once: true
+  delegate_to: localhost
+
+- name: Disable telemetry
+  ansible.builtin.uri:
+    url: https://{{ inventory_hostname }}:5601/internal/telemetry/optIn
+    method: POST
+    body_format: json
+    body: >
+      {
+        "enabled":false
+      }
+    status_code:
+      - 200
+      - 201
+      - 204
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: true
+      Elastic-Api-Version: 2
+  run_once: true
+  delegate_to: localhost

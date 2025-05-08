@@ -1,0 +1,171 @@
+---
+- name: RHEL Install
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+  block:
+    - name: Add Elasticsearch Repo
+      ansible.builtin.yum_repository:
+        name: elasticsearch-8.x
+        baseurl:
+          - "{{ esRepoPath | default('https://artifacts.elastic.co/packages/8.x/yum') }}"
+        gpgcheck: 0
+        enabled: 1
+        priority: 1
+        description: "Elasticsearch 8.x repo"
+      become: true
+
+    - name: Install Metricbeat
+      ansible.builtin.package:
+        name: metricbeat-{{ esVersion }}
+        state: present
+      become: true
+
+- name: Debian Install
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+  block:
+    - name: Install prerequisite packages (Debian)
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - gpg
+        - apt-transport-https
+      become: true
+
+    - name: Add Elasticsearch GPG (Debian)
+      ansible.builtin.shell:
+        cmd: "wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg"
+        creates: /usr/share/keyrings/elasticsearch-keyring.gpg
+      become: true
+
+    - name: Add Elasticsearch Repo (Debian)
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main"
+        filename: "/etc/apt/sources.list.d/elastic-8.x"
+        state: present
+      become: true
+
+    - name: Install Metricbeat
+      ansible.builtin.package:
+        name: metricbeat={{ esVersion }}
+        state: present
+      become: true
+
+- name: Create Certs Directory
+  ansible.builtin.file:
+    path: /etc/metricbeat/certs/
+    state: directory
+  become: true
+ 
+- name: Copy Certificates to Metricbeat Conf Dir
+  copy:
+    src: "certificates/{{ item.src }}"
+    dest: /etc/metricbeat/certs/{{ item.src }}
+    group: root
+    mode: 0640
+  loop:
+    - src: "{{ hostCert }}"
+    - src: "{{ hostKey }}"
+    - src: "{{ hostCA }}"
+  notify: Restart Metricbeat
+  become: true
+
+- name: Get cluster UUID
+  ansible.builtin.uri:
+    url: "{{ esAPI }}"
+    method: GET
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+  run_once: true
+  delegate_to: localhost
+  register: clusterUUIDGET
+  no_log: true
+  when: clusterUUIDGET.json.cluster_uuid is undefined
+
+- name: Template Metricbeat Configs
+  template:
+    src: 'templates/{{ item }}.j2'
+    dest: '/etc/metricbeat/{{ item }}'
+  loop:
+    - metricbeat.yml
+    - metricbeat.setup.yml
+  vars:
+    logstash_host: "{{ groups['logstash'][0] }}"
+  notify: Restart Metricbeat 
+  become: true
+
+- name: Create password hash for consistency check
+  ansible.builtin.lineinfile:
+    path: /etc/metricbeat/keystore.hash
+    line: "{{ item.name }}:{{ item.pass | password_hash('sha256', 65534 | random(seed=inventory_hostname) | string ) }}"
+    regexp: ^{{ item.name }}.*
+    state: present
+    mode: 0600
+    owner: root
+    group: root
+    create: true
+  loop:
+    - name: monitor_password
+      pass: "{{ monitorPassword }}"
+    - name: beats_password
+      pass: "{{ beatsPassword }}"
+    - name: elastic_password
+      pass: "{{ elasticPassword }}"
+  become: true
+  no_log: true
+  notify: Rebuild Keystore
+
+- name: Add Module Configs
+  template:
+    src: templates/modules/{{ item }}.yml
+    dest: /etc/metricbeat/modules.d/{{ item }}.yml
+  with_items:
+    - "{{ metricbeatModules }}" 
+  notify: Restart Metricbeat
+  become: true
+
+- name: Run Setup
+  block: 
+
+    - name: Flush Handlers
+      ansible.builtin.meta: flush_handlers
+
+    - name: Check that Metricbeat Canary exists
+      uri:
+        url: "{{ esAPI }}/_template/metricbeat-{{ esVersion }}-canary"
+        method: GET
+        status_code:
+          - 200
+        user: elastic
+        password: "{{ elasticPassword }}"
+        validate_certs: false
+        force_basic_auth: true
+      no_log: true
+  
+  rescue:
+    - name: Setup Modules
+      command: metricbeat -c /etc/metricbeat/metricbeat.setup.yml setup -e
+
+    - name: Set Metricbeat Canary
+      uri:
+        url: "{{ esAPI }}/_template/metricbeat-{{ esVersion  }}-canary"
+        method: PUT
+        body_format: json
+        body: >
+          {
+            "index_patterns": [
+              "canary"
+            ]
+          }
+        status_code:
+          - 200
+        user: elastic
+        password: "{{ elasticPassword }}"
+        validate_certs: false
+        force_basic_auth: true
+      no_log: true
+      run_once: true
+
+  become: true
+  run_once: true

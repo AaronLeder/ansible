@@ -1,5 +1,11 @@
 <<<<<<< HEAD
 # Deploy ES
+
+## To do:
+- add a "switch" for pre-existing certs vs diy
+
+
+
 To prepare for deployment:
 1. Prerequisites:
    ```

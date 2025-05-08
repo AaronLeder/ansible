@@ -1,0 +1,17 @@
+# Module: logstash
+# Docs: https://www.elastic.co/guide/en/beats/metricbeat/master/metricbeat-module-logstash.html
+
+- module: logstash
+  metricsets:
+   - node
+   - node_stats
+  period: 10s
+  hosts: ["localhost:9600"]
+  index: ".monitoring-logstash-8-mb-%{+yyyy.MM.dd}"
+  xpack.enabled: true
+  username: "remote_monitoring_user"
+  password: "${monitor_password}"
+  ssl.certificate_authorities: ["/etc/metricbeat/certs/{{ hostCA }}"] 
+  ssl.certificate: "/etc/metricbeat/certs/{{ hostCert }}" 
+  ssl.key: "/etc/metricbeat/certs/{{ hostKey }}"
+  ssl.verification_mode: certificate

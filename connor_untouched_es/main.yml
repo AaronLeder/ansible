@@ -1,0 +1,99 @@
+---
+- name: Prepare Hosts
+  hosts: all
+  roles:
+    - prepare_hosts
+  tags:
+    - prepare_hosts
+    - never
+  gather_facts: false
+
+- name: Install HAProxy
+  hosts: haproxy
+  roles:
+    - haproxy
+  tags:
+    - haproxy
+  gather_facts: false
+
+- name: Install Elasticsearch
+  hosts: elasticsearch
+  roles:
+    - elasticsearch-install
+  tags:
+    - elasticsearch
+  gather_facts: false
+
+- name: Start/Restart Elasticsearch Master
+  hosts: elasticsearch_master_restart
+  serial: 1
+  roles:
+    - elasticsearch-restart
+  tags:
+    - elasticsearch
+  gather_facts: false
+
+- name: Start/Restart Elasticsearch Data
+  hosts: elasticsearch_data_restart
+  serial: 1
+  roles:
+    - elasticsearch-restart
+  tags:
+    - elasticsearch
+  gather_facts: false
+
+- name: Customize Elasticsearch
+  hosts: elasticsearch
+  roles:
+    - elasticsearch-customize
+  tags:
+    - elasticsearch
+  gather_facts: false
+
+- name: Install Kibana
+  hosts: kibana
+  roles:
+    - kibana
+  tags:
+    - kibana
+  gather_facts: false
+
+- name: Install Fleet Server
+  hosts: fleet_server
+  roles:
+    - fleet_server
+  tags:
+    - fleet_server
+  gather_facts: false
+
+- name: Deploy Elastic Agent
+  hosts: all
+  roles: 
+    - elastic_agent
+  tags: 
+    - elastic_agent
+  gather_facts: false
+
+- name: Install Logstash
+  hosts: logstash
+  roles:
+    - logstash
+  tags:
+    - logstash
+  gather_facts: false
+
+- name: Install Metricbeat
+  hosts: metricbeat
+  roles:
+    - metricbeat
+  tags:
+    - metricbeat
+  gather_facts: false
+
+- name: Install Filebeat
+  hosts: filebeat
+  roles:
+    - filebeat
+  tags:
+    - filebeat
+  gather_facts: false

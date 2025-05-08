@@ -109,10 +109,18 @@
 
     - name: Launch the web dashboard
       ansible.builtin.command: nohup minikube dashboard --url > ~/minikube-url.txt 2>&1 &
-    
-    - name: get dashboard url
+
+    - name: Allow proxy time to come up
+      ansible.builtin.pause:
+        minutes: 1
+
+    - name: Get dashboard URL
       ansible.builtin.command: tail -n 1 ~/minikube-url.txt
       register: MK_URL
+      failed_when: >
+        MK_URL.stdout_lines is not defined or
+        MK_URL.stdout_lines | length == 0 or
+        not MK_URL.stdout_lines[0].startswith('http')
       
       # Put this at the end
 #    - name: output Minikube URL
