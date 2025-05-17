@@ -138,3 +138,7 @@
     - name: Install kubectl on Ubuntu
       become: true
       ansible.builtin.shell: snap install kubectl --classic
+
+      # ========= BUILD hello-node
+
+    
