@@ -1,0 +1,34 @@
+- name: Check for living cluster
+  ansible.builtin.uri:
+    url: "{{ esAPI }}/_cluster/health"
+    method: GET
+    user: elastic
+    password: "{{ elasticPassword }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code:
+      - 200
+
+- name: Check for license
+  stat:
+    path: license.json
+  register: statLicense
+  delegate_to: localhost
+  run_once: true
+
+- name: Import License
+  ansible.builtin.uri:
+    url: "{{ esAPI }}/_license"
+    method: PUT
+    body_format: json
+    body: "{{ lookup('file','license.json') }}"
+    status_code: "200"
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+  run_once: true
+  when: statLicense.stat.exists
+
+- name: include system accounts
+  ansible.builtin.include_tasks: system_accounts.yml

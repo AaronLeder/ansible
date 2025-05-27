@@ -22,6 +22,11 @@
         reboot_timeout: 600
       when: ansible_facts.packages['linux-image-generic'] is defined
 
+    - name: Install zypper
+      become: true
+      apt: 
+        name: zypper
+
       # Ensure zypper is installed, or this won't work!
     - name: Check if Reboot is required
       become: true

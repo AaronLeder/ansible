@@ -1,0 +1,17 @@
+---
+# Valid configurations are:
+# name: string, Name of pipeline that must match a template (required)
+# description: string, Brief description of what the pipeline does (optional, defaults to name)
+# hosts: string, list of hosts to enable the pipeline for (required)
+# batch_delay: integer, Time in milliseconds to wait for new events before processing a batch (optional, defaults to 50)
+# batch_size: integer, Number of events to process at once before shipping to Elasticsearch (optional, defaults to 125)
+# workers: integer, Number of threads to process Logstash filters and outputs (optional, defaults to 2)
+# queue_type: (persisted | memory), on-disk or in-memory queue for batch processing (optional, defaults to memory)
+# queue_maxbytes: (string, include unit abbreviation | integer, interpreted as # of bytes), Total capacity of the queue in bytes, i.e. 1gb / 1024mb / 102400kb (optional, defaults to 1gb)
+# queue_checkpoint: integer, Number of events written to the queue between checkpoints (optional, defaults to 1024)
+
+pipelinesList:
+  - name: heartbeat
+    hosts: "all"
+  - name: filebeat
+    hosts: "all"

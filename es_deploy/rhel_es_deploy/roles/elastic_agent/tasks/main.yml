@@ -1,0 +1,28 @@
+- name: Check if Elastic Agent folder exists
+  ansible.builtin.stat:
+    path: /opt/elastic-agent-{{ esVersion }}-linux-x86_64
+  register: esAgentExists
+
+- name: Copy and unzip Agent Package to host
+  ansible.builtin.unarchive:
+    src: packages/elastic-agent-{{ esVersion }}-linux-x86_64.tar.gz
+    dest: /opt
+  become: true
+  when: not esAgentExists.stat.exists
+
+- name: Copy CA cert to trust root
+  ansible.builtin.copy:
+    src: certificates/{{ hostCA }}
+    dest: /etc/ssl/certs/
+  become: true
+
+- name: Install and enroll Elastic Agent
+  ansible.builtin.shell: |
+    ./elastic-agent install \
+    --force \
+    --url=https://{{ hostvars[groups['fleet_server'][0]].ansible_host }}:8220 \
+    --enrollment-token=<change me>
+  become: true
+  args:
+    chdir: /opt/elastic-agent-{{ esVersion }}-linux-x86_64
+    creates: /opt/Elastic/Agent/elastic-agent

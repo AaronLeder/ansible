@@ -1,0 +1,24 @@
+# Module: elasticsearch
+# Docs: https://www.elastic.co/guide/en/beats/metricbeat/master/metricbeat-module-elasticsearch.html
+
+- module: elasticsearch
+  xpack.enabled: true
+  metricsets:
+    - cluster_stats
+    - enrich
+    - ingest_pipeline
+    - ml_job
+    - pending_tasks
+    - node
+    - node_stats
+    - index
+    - index_recovery
+    - index_summary
+    - shard
+  period: 10s
+  hosts: ["https://127.0.0.1:9200"]
+  ssl.enabled: true
+  username: beats_ingest
+  password: "${beats_password}"
+  ssl.certificate_authorities: ["/etc/metricbeat/certs/{{ hostCA }}"] 
+  ssl.verification_mode: certificate

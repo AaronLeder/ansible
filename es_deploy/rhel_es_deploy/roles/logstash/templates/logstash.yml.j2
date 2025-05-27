@@ -1,0 +1,29 @@
+node.name: {{ inventory_hostname | lower }}
+path.data: /var/lib/logstash
+pipeline.workers: 3 
+pipeline.batch.size: 200
+pipeline.ordered: auto
+config.reload.automatic: true
+config.reload.interval: 60s
+queue.type: persisted
+queue.max_bytes: 100mb
+path.logs: /var/log/logstash
+monitoring.enabled: false
+# monitoring.cluster_uuid: "{{ clusterUUIDGET.json.cluster_uuid }}"
+xpack.management.enabled: true
+xpack.management.pipeline.id: [{% for item in availablePipelines.pipelinesList if inventory_hostname in item.hosts or 'all' in item.hosts %}
+'{{item.name}}'
+{%- if not loop.last %}, {% endif %}
+{% endfor %}]
+xpack.management.elasticsearch.username: logstash_internal
+xpack.management.elasticsearch.password: ${es_pass}
+xpack.management.elasticsearch.hosts: [{% for host in groups['elasticsearch'] %}
+'https://{{ host }}:9200'
+{%- if not loop.last %}, {% endif %}
+{% endfor %}]
+xpack.management.elasticsearch.ssl.certificate_authority: "/etc/logstash/certs/{{ hostCA }}"
+xpack.management.elasticsearch.ssl.keystore.path: /etc/logstash/logstash.keystore
+xpack.management.elasticsearch.ssl.keystore.password: ${es_pass}
+xpack.management.elasticsearch.ssl.verification_mode: certificate
+xpack.management.elasticsearch.sniffing: false
+xpack.management.logstash.poll_interval: 5s
