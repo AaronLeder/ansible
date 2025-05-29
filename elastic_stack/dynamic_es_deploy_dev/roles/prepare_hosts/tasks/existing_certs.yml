@@ -1,7 +1,0 @@
-# remote_src because localhost is technicaly the remote_src
-- name: Copy existing PKI into certificates/
-  delegate_to: localhost
-  ansible.builtin.copy: 
-    src: "{{ ownCertsPath }}"
-    dest: "certificates/"
-    remote_src: true
