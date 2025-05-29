@@ -1,0 +1,44 @@
+# Recommended to use FQDN.
+all:
+  vars:
+    # Cluster name for Elasticsearch
+    clusterName: "my-cluster"
+    # Optional environment variable
+    esEnvironment: "my-cluster"
+    ansible_ssh_user: "test"
+    ansible_sudo_pass: "{{ ansible_ssh_password }}"
+  hosts:
+    ubuntu1:
+      ansible_host: 192.168.100.29
+    ubuntu2:
+      ansible_host: 192.168.100.173
+    ubuntu3:
+      ansible_host: 192.168.100.14
+    ubuntu4:
+      ansible_host: 192.168.100.235
+
+
+elasticsearch:
+  vars: 
+    pathData: "/data"
+  hosts:
+    ubuntu1:
+    ubuntu2:
+    ubuntu3:
+
+
+kibana:
+  hosts:
+    ubuntu4:
+
+logstash:
+  hosts:
+    ubuntu4:
+
+haproxy:
+  hosts:
+    ubuntu4:
+
+fleet_server:
+  hosts:
+    ubuntu4:

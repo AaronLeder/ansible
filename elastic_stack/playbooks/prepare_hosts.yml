@@ -1,0 +1,9 @@
+---
+- name: Prepare Hosts
+  hosts: all
+  roles:
+    - prepare_hosts
+  tags:
+    - prepare_hosts
+    - never
+  gather_facts: false

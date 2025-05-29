@@ -1,0 +1,29 @@
+input {
+  beats { 
+    port => 5044  
+    ssl => true 
+    ssl_certificate_authorities => ["/etc/logstash/certs/{{ hostCA }}"] 
+    ssl_certificate => "/etc/logstash/certs/{{ hostCert }}" 
+    ssl_key => "/etc/logstash/certs/{{ hostKey }}"
+    ssl_verify_mode => "force_peer"
+  }
+}
+
+filter {
+  mutate { add_field => { "metapipe" => "%{[@metadata][pipeline]}" } }
+}
+
+output {
+    elasticsearch {
+        hosts            => [{% for host in groups['elasticsearch'] %}
+'https://{{ host }}:9200'
+{%- if not loop.last %}, {% endif %}
+{% endfor %}]
+        http_compression => true  
+        ssl              => true
+        cacert           => '/etc/logstash/certs/{{ hostCA }}'
+        user             => "logstash_internal"
+        password         => "${es_pass}"
+        index            => "%{[@metadata][beat]}-%{[@metadata][version]}"
+    }
+}

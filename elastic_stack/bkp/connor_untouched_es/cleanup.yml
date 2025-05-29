@@ -1,0 +1,205 @@
+---
+
+- name: Cleanup Kibana
+  hosts: kibana
+  gather_facts: false
+  tasks:
+
+    - name: Stop Kibana
+      ansible.builtin.service:
+        name: kibana
+        state: stopped
+      become: true
+      ignore_errors: true
+
+    - name: Remove Kibana package
+      ansible.builtin.package:
+        name: kibana
+        state: absent
+      become: true
+
+    - name: Clear Kibana paths
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop:
+        - path: "/etc/kibana/"
+        - path: "/var/lib/kibana/"
+        - path: "/usr/share/kibana/"
+        - path: "/var/log/kibana/"
+      become: true
+
+- name: Cleanup Logstash
+  hosts: logstash
+  gather_facts: false
+  tasks:
+
+    - name: Stop Logstash
+      ansible.builtin.service:
+        name: logstash
+        state: stopped
+      become: true
+      ignore_errors: true
+
+    - name: Remove Logstash package
+      ansible.builtin.package:
+        name: logstash
+        state: absent
+      become: true
+
+    - name: Clear Logstash paths
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop:
+        - path: "/etc/logstash/"
+        - path: "/var/lib/logstash/"
+        - path: "/usr/share/logstash/"
+        - path: "/var/log/logstash/"
+      become: true
+
+- name: Cleanup Filebeat
+  hosts: filebeat
+  gather_facts: false
+  tasks:
+
+    - name: Stop Filebeat
+      ansible.builtin.service:
+        name: filebeat
+        state: stopped
+      become: true
+      ignore_errors: true
+
+    - name: Remove Filebeat package
+      ansible.builtin.package:
+        name: filebeat
+        state: absent
+      become: true
+
+    - name: Clear Filebeat paths
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop:
+        - path: "/etc/filebeat/"
+        - path: "/var/lib/filebeat/"
+        - path: "/usr/share/filebeat/"
+        - path: "/var/log/filebeat/"
+      become: true
+
+- name: Cleanup Metricbeat
+  hosts: metricbeat
+  gather_facts: false
+  tasks:
+
+    - name: Stop Metricbeat
+      ansible.builtin.service:
+        name: metricbeat
+        state: stopped
+      become: true
+      ignore_errors: true
+
+    - name: Remove Metricbeat package
+      ansible.builtin.package:
+        name: metricbeat
+        state: absent
+      become: true
+
+    - name: Clear Metricbeat paths
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop:
+        - path: "/etc/metricbeat/"
+        - path: "/var/lib/metricbeat/"
+        - path: "/usr/share/metricbeat/"
+        - path: "/var/log/metricbeat/"
+      become: true
+
+
+- name: Cleanup Fleet Server
+  hosts: fleet_server
+  gather_facts: false
+  ignore_errors: true
+  tasks:
+
+    - name: Stop Elastic Agent
+      ansible.builtin.service:
+        name: elastic-agent
+        state: stopped
+      become: true
+      ignore_errors: true
+
+    - name: Clean Paths
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /opt/Elastic
+      become: true
+
+- name: Cleanup Elasticsearch
+  hosts: elasticsearch
+  gather_facts: false
+  tasks:
+
+    - name: Stop Elasticsearch
+      ansible.builtin.service:
+        name: elasticsearch
+        state: stopped
+      become: true
+      ignore_errors: true
+
+    # - name: Remove Elasticsearch package
+    #   ansible.builtin.package:
+    #     name: elasticsearch
+    #     state: absent
+    #   become: true
+    
+    - name: Remove Elasticsearch Package (Debian)
+      ansible.builtin.apt:
+        name: elasticsearch
+        state: absent
+        purge: true
+      become: true
+
+    - name: Clear Elasticsearch paths
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop:
+        - path: "/etc/elasticsearch/"
+        - path: "/var/lib/elasticsearch/"
+        - path: "/usr/share/elasticsearch/"
+        - path: "/var/log/elasticsearch/"
+        - path: "/data/"
+      become: true
+
+- name: Cleanup HAProxy
+  hosts: haproxy
+  gather_facts: false
+  tasks:
+
+    - name: Stop HAProxy
+      ansible.builtin.service:
+        name: haproxy
+        state: stopped
+      become: true
+      ignore_errors: true
+
+    - name: Remove HAProxy package
+      ansible.builtin.package:
+        name: haproxy
+        state: absent
+      become: true
+
+    - name: Clear Elasticsearch paths
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop:
+        - path: "/etc/haproxy/"
+        - path: "/usr/share/haproxy/"
+        - path: "/var/log/elasticsearch/"
+        - path: "/var/lib/haproxy/"
+      become: true

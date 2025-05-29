@@ -1,0 +1,37 @@
+# Ignore directories
+files/
+packages/
+certificates/
+# Ignore any virtual environments
+venv/
+env/
+
+# Ignore secret files
+*.vault.yml
+*.secrets.yml
+*.key
+*.pem
+
+# Ignore local backups
+*.bak
+*.tmp
+*~
+
+# Ignore IDE/editor configs
+.vscode/
+.idea/
+*.swp
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore Ansible specific cache
+*.retry
+
+# Optional: Ignore local inventories (if generated dynamically)
+inventory/generated/
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6ee488a (Initial Commit)

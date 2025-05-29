@@ -1,0 +1,19 @@
+{% set ns = namespace(found=false) %}
+{% for config in configList.elasticsearchConfigs %}
+{# check if host in configured in elasticsearchConfigs #}
+{% if config.hosts is defined %}
+{% if inventory_hostname in config.hosts %}
+{% if config.heap is defined %}
+{# if host IS configured AND item.heap is defined, set limits #}
+{% set ns.found = true %}
+-Xms{{ config.heap }}
+-Xmx{{ config.heap }}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{# if host isn't configured above, use defaults#}
+{% if not ns.found %}
+#-Xms2g
+#-Xmx2g
+{% endif %}

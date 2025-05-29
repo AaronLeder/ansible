@@ -1,0 +1,128 @@
+---
+# Uncomment the tasks below if they are required for your environment
+# - name: Copy ssh key
+#   ansible.builtin.command:
+#     cmd: "ssh-copy-id {{ ansible_host }}"
+#   delegate_to: localhost
+#   changed_when: false
+#
+# - name: Disable fapolicyd
+#   ansible.builtin.systemd:
+#     name: fapolicyd
+#     state: stopped
+#     enabled: false
+#   become: true
+#
+# - name: Remove noexec from /tmp
+#   ansible.builtin.lineinfile:
+#     path: /etc/fstab
+#     regexp: ^/dev/mapper/rhel-tmp.*$
+#     line: "/dev/mapper/rhel-tmp    /tmp                    xfs     nodev,nosuid 0 0"
+#   become: true
+#   notify: Reboot host
+#
+# - name: Set hostname
+#   ansible.builtin.hostname:
+#     name: "{{ inventory_hostname }}"
+#   become: true
+#
+# - name: Disable SELinux
+#   ansible.builtin.lineinfile:
+#     path: /etc/sysconfig/selinux
+#     line: "SELINUX=permissive"
+#     regexp: "^SELINUX=.*$"
+#     state: present
+#   become: true
+
+
+
+# Uncomment the tasks below to use DISA repos if on a DODIN network
+# - name: Add DISA Repos
+#   ansible.builtin.yum_repository:
+#     name: "{{ item.name }}"
+#     baseurl:
+#       - "{{ item.baseurl }}"
+#     gpgcheck: 0
+#     enabled: 1
+#     priority: 1
+#     description: "{{ item.description }}"
+#   become: true
+#   loop:
+#     - name: "disa_appstream"
+#       description: "DISA 8 - AppStream"
+#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/appstream/os/"
+#     - name: "disa_baseos"
+#       description: "DISA 8 - BaseOS"
+#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/baseos/os/"
+#
+# - name: Add DoD Root for proxy trust
+#   copy:
+#     dest: "/etc/pki/ca-trust/source/anchors/{{ item | basename }}"
+#     src: "{{ item }}"
+#   with_fileglob: "certificates/dod-*"
+#   become: true
+#
+# - name: Update CA Trust
+#   shell: "update-ca-trust"
+#   become: true
+#   changed_when: false
+
+- name: Generate CA key
+  ansible.builtin.command:
+    cmd: "openssl genrsa -out ./certificates/ca.key 2048"
+    creates: "./certificates/ca.key"
+  run_once: true
+  delegate_to: localhost
+
+- name: Generate CA certificates
+  ansible.builtin.command:
+    cmd: "openssl req -x509 -new -nodes -key ./certificates/ca.key -sha256 -days 1000 -out ./certificates/ca.crt -subj '/C=US/ST=Atropia/L=Krasnovia/O=Self/OU=Self/CN=Ansible Generated CA'"
+    creates: "./certificates/ca.crt"
+  run_once: true
+  delegate_to: localhost
+
+- name: Generate private keys
+  ansible.builtin.command:
+    # cmd: "openssl genrsa -out ./certificates/{{ inventory_hostname }}.key 2048"
+    cmd: "openssl ecparam -name secp384r1 -genkey -noout -out ./certificates/{{ inventory_hostname }}.key"
+    creates: ./certificates/{{ inventory_hostname }}.key
+  delegate_to: localhost
+
+- name: Generate CSR Configs
+  template:
+    src: templates/server.csr
+    dest: "./certificates/{{ inventory_hostname }}.csr.conf"
+  delegate_to: localhost
+  register: csrConfig
+
+- name: Generate CSRs
+  ansible.builtin.command:
+    cmd: "openssl req -new -key ./certificates/{{ inventory_hostname }}.key -out ./certificates/{{ inventory_hostname }}.csr -config ./certificates/{{ inventory_hostname }}.csr.conf"
+  delegate_to: localhost
+  when: csrConfig.changed
+
+- name: Generate Cert Configs
+  template:
+    src: templates/cert.conf
+    dest: "./certificates/{{ inventory_hostname }}.crt.conf"
+  delegate_to: localhost
+  register: certConfig
+
+- name: Sign CSRs
+  ansible.builtin.command:
+    cmd: "openssl x509 -req -in ./certificates/{{ inventory_hostname }}.csr -CA ./certificates/ca.crt -CAkey ./certificates/ca.key -out ./certificates/{{ inventory_hostname }}.crt -days 1000 -sha256 -extfile ./certificates/{{ inventory_hostname }}.crt.conf"
+  delegate_to: localhost
+  when: certConfig.changed
+
+- name: Build hosts file
+  lineinfile: 
+    dest: /etc/hosts
+    regexp: '.*{{ item }}$' 
+    line: "{{ hostvars[item]['ansible_host'] }} {{ item }}" 
+    state: present
+  when: hostvars[item]['ansible_host'] is defined
+  with_items: "{{ groups['all'] }}"
+  become: true
+
+- name: Gather facts
+  ansible.builtin.gather_facts:

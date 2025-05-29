@@ -1,0 +1,105 @@
+---
+# Uncomment the tasks below if they are required for your environment
+# - name: Copy ssh key
+#   ansible.builtin.command:
+#     cmd: "ssh-copy-id {{ ansible_host }}"
+#   delegate_to: localhost
+#   changed_when: false
+#
+# - name: Disable fapolicyd
+#   ansible.builtin.systemd:
+#     name: fapolicyd
+#     state: stopped
+#     enabled: false
+#   become: true
+#
+# - name: Remove noexec from /tmp
+#   ansible.builtin.lineinfile:
+#     path: /etc/fstab
+#     regexp: ^/dev/mapper/rhel-tmp.*$
+#     line: "/dev/mapper/rhel-tmp    /tmp                    xfs     nodev,nosuid 0 0"
+#   become: true
+#   notify: Reboot host
+#
+# - name: Set hostname
+#   ansible.builtin.hostname:
+#     name: "{{ inventory_hostname }}"
+#   become: true
+#
+# - name: Disable SELinux
+#   ansible.builtin.lineinfile:
+#     path: /etc/sysconfig/selinux
+#     line: "SELINUX=permissive"
+#     regexp: "^SELINUX=.*$"
+#     state: present
+#   become: true
+
+
+
+# Uncomment the tasks below to use DISA repos if on a DODIN network
+# - name: Add DISA Repos
+#   ansible.builtin.yum_repository:
+#     name: "{{ item.name }}"
+#     baseurl:
+#       - "{{ item.baseurl }}"
+#     gpgcheck: 0
+#     enabled: 1
+#     priority: 1
+#     description: "{{ item.description }}"
+#   become: true
+#   loop:
+#     - name: "disa_appstream"
+#       description: "DISA 8 - AppStream"
+#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/appstream/os/"
+#     - name: "disa_baseos"
+#       description: "DISA 8 - BaseOS"
+#       baseurl: "https://dodrhss.csd.disa.mil/pub/sat-import/DISA/content/dist/rhel8/8/x86_64/baseos/os/"
+#
+# - name: Add DoD Root for proxy trust
+#   copy:
+#     dest: "/etc/pki/ca-trust/source/anchors/{{ item | basename }}"
+#     src: "{{ item }}"
+#   with_fileglob: "certificates/dod-*"
+#   become: true
+#
+# - name: Update CA Trust
+#   shell: "update-ca-trust"
+#   become: true
+#   changed_when: false
+
+- name: Removing certificates dir
+  delegate_to: localhost
+  run_once: true
+  ansible.builtin.file:
+    path: "certificates/"
+    state: absent
+  ignore_errors: true
+
+- name: Recreating certificates dir
+  delegate_to: localhost
+  run_once: true
+  ansible.builtin.file:
+    path: "certificates/"
+    state: directory
+  ignore_errors: true
+
+- name: Certs provided
+  when: ownCerts is true
+  ansible.builtin.include_tasks: existing_certs.yml
+
+- name: Certs not provided
+  when: ownCerts is false
+  ansible.builtin.include_tasks: build_certs.yml
+
+- name: Build hosts file
+  lineinfile: 
+    dest: /etc/hosts
+    regexp: '.*{{ item }}$' 
+    line: "{{ hostvars[item]['ansible_host'] }} {{ item }}" 
+    state: present
+  when: hostvars[item]['ansible_host'] is defined
+  with_items: "{{ groups['all'] }}"
+  become: true
+
+- name: Gather facts
+  ansible.builtin.gather_facts:

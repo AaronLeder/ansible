@@ -1,0 +1,118 @@
+---
+- name: Include Elasticsearch Vars
+  ansible.builtin.include_vars:
+    file: group_vars/{{ esEnvironment }}-elasticsearch_cluster.yml
+    name: configList
+
+- name: Install Kibana
+  ansible.builtin.dnf:
+    name: packages/kibana-{{ esVersion }}-linux-x86_64.tar.gz
+    state: present
+  become: true
+  notify: Restart Kibana
+
+- name: Add Kibana port
+  ansible.builtin.shell: firewall-cmd --add-port 5601/tcp --permanent && firewall-cmd --reload
+  become: true
+  changed_when: false
+
+- name: Make certs directory
+  ansible.builtin.file:
+    path: /etc/kibana/certs/
+    state: directory
+    mode: 0750
+    group: kibana
+  become: true
+
+- name: Copy Certificates to Kibana Conf Dir
+  copy:
+    src: "certificates/{{ item.src }}"
+    dest: /etc/kibana/certs/{{ item.dest | default(item.src) }}
+    group: kibana
+    mode: 0640
+  loop:
+    - src: "{{ hostCert }}"
+    - src: "{{ hostKey }}"
+    - src: "{{ hostCA }}"
+  notify: Restart Kibana
+  become: true
+
+- name: Template Kibana Config
+  template:
+    src: templates/kibana.yml.j2
+    dest: /etc/kibana/kibana.yml
+  notify: Restart Kibana
+  become: true
+
+- name: Create password hash for consistency check
+  ansible.builtin.lineinfile:
+    path: /etc/kibana/keystore.hash
+    line: "{{ item.name }}:{{ item.pass | password_hash('sha256', 65534 | random(seed=inventory_hostname) | string ) }}"
+    regexp: ^{{ item.name }}.*
+    state: present
+    mode: 0600
+    owner: root
+    group: root
+    create: true
+  loop:
+    - name: elasticsearch.password
+      pass: "{{ kibanaPassword }}"
+  become: true
+  no_log: true
+  notify: Rebuild Keystore
+
+- name: Flush Handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Set ownership of directory
+  ansible.builtin.file:
+    path: /etc/kibana/
+    mode: 0770
+  become: true
+
+- name: Update default route
+  ansible.builtin.uri:
+    url: https://{{ inventory_hostname }}:5601/api/kibana/settings
+    method: POST
+    body_format: json
+    body: >
+      {
+        "changes": {
+          "defaultRoute":"/app/dashboards"
+        }
+      }
+    status_code:
+      - 200
+      - 201
+      - 204
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: true
+  run_once: true
+  delegate_to: localhost
+
+- name: Disable telemetry
+  ansible.builtin.uri:
+    url: https://{{ inventory_hostname }}:5601/internal/telemetry/optIn
+    method: POST
+    body_format: json
+    body: >
+      {
+        "enabled":false
+      }
+    status_code:
+      - 200
+      - 201
+      - 204
+    user: elastic
+    password: "{{ elasticPassword }}"
+    validate_certs: false
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: true
+      Elastic-Api-Version: 2
+  run_once: true
+  delegate_to: localhost
