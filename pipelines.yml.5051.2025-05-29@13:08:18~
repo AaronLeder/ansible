@@ -2,7 +2,6 @@
 # For more information on multiple pipelines, see the documentation:
 #   https://www.elastic.co/guide/en/logstash/current/multiple-pipelines.html
 
-# APPLE #
 - pipeline.id: rcc-in-metricbeat
   path.config: /etc/logstash/conf.d/rcc-in-metricbeat/*.conf
 - pipeline.batch.size: 250
@@ -17,8 +16,3 @@
   path.config: /etc/logstash/conf.d/autogen/*.conf,
 - pipeline.id: tippingpoint_feed2
   path.config: /etc/logstash/conf.d/tippingpoint2/*.conf[admin@rcc-es1 logstash]$
-
-# BEGIN PEAR #
-- pipeline.id: pear-pipeline
-  path.config: /etc/logstash/conf.d/pear-pipeline/*.conf
-# END PEAR #
