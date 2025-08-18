@@ -1,0 +1,24 @@
+---
+# ================== READ ME ================== #
+
+# I have only ever tried this on RHEL 7 & 8.
+# I don't know if it works on other OS.
+
+# `gather_facts: true` is because we need to check
+# the status of SELinux.
+
+# running `restorecon` is best practice when
+# working in an environment with SELinux 
+
+# ================== READ ME ================== #
+
+- name: Configure ifup-local script for eno6 tuning
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - rhel-configure-ifup-local 
+  vars:
+    # Name of your NIC interface
+    NIC_Name: "eno6"
+

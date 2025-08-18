@@ -1,0 +1,33 @@
+---
+- name: Update APT package cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600  # Optional: only updates if older than 1 hour
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: yes  # Optional: remove unused packages
+
+- name: Install zypper
+  become: true
+  ansible.builtin.apt: 
+    name: zypper
+
+  # Ensure zypper is installed, or this won't work!
+- name: Check if Reboot is required
+  become: true
+  ansible.builtin.command: needs-restarting -r
+  register: reboot_check
+  failed_when: reboot_check.rc not in [0,1]
+  changed_when: reboot_check.rc == 1    
+
+- name: Reboot the system if required. I'll check and make sure the host comes back up!
+  become: true
+  ansible.builtin.reboot:
+    msg: "System reboot initiated by Ansible after patching."
+    connect_timeout: 5
+    reboot_timeout: 300
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+  when: reboot_check.rc == 1
