@@ -1,0 +1,12 @@
+---
+# ================== READ ME ================== #
+
+# ================== READ ME ================== #
+
+- name: Set up Docker repository on Ubuntu
+  hosts: all
+  order: sorted
+  become: true
+  gather_facts: true
+  roles: 
+    - ubuntu-install-docker
