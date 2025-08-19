@@ -1,0 +1,42 @@
+all:
+  vars:
+    # Cluster name for Elasticsearch
+    clusterName: "my-cluster"
+    # Optional environment variable
+    esEnvironment: "my-cluster"
+    ansible_ssh_user: "test"
+    #ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  hosts:
+    ubuntu001:
+      ansible_host: 192.168.100.155
+    ubuntu002:
+      ansible_host: 192.168.100.234
+    ubuntu003:
+      ansible_host: 192.168.100.236
+    ubuntu004:
+      ansible_host: 192.168.100.54
+
+
+elasticsearch:
+  vars: 
+    pathData: "/data"
+  hosts:
+    ubuntu001:
+    ubuntu002:
+    ubuntu003:
+
+kibana:
+  hosts:
+    ubuntu004:
+
+logstash:
+  hosts:
+    ubuntu004:
+
+haproxy:
+  hosts:
+    ubuntu004:
+
+fleet_server:
+  hosts:
+    ubuntu004:

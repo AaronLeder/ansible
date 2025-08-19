@@ -1,0 +1,163 @@
+---
+- name: Include Elasticsearch Vars
+  ansible.builtin.include_vars:
+    file: group_vars/{{ esEnvironment }}-elasticsearch_cluster.yml
+    name: configList
+
+- name: Add hosts to "master" restart group
+  ansible.builtin.set_fact:
+    esGroup: master
+  when: '"master" in item.roles and inventory_hostname in item.hosts'
+  with_items: "{{ configList.elasticsearchConfigs }}"
+
+- name: Add hosts to "data" restart group
+  ansible.builtin.set_fact:
+    esGroup: data
+  when: '"master" not in item.roles and inventory_hostname in item.hosts'
+  with_items: "{{ configList.elasticsearchConfigs }}"
+
+- name: Set needsRestart to false
+  ansible.builtin.set_fact:
+    esNeedsRestart: false
+
+# ===== Different Install Methods ===== #
+- name: Install via dnf
+  when: ansible_facts['distribution'] in ["CentOS", "RedHat"]
+  ansible.builtin.include_tasks: dnf-install.yml
+
+- name: Install via apt
+  when: ansible_facts['distribution'] in ["Debian", "Ubuntu"]
+  ansible.builtin.include_tasks: apt-install.yml
+
+# For posterity, this is how you set vm.max_map_count   
+# - name: Set vm.max_map_count to Required Value
+#   ansible.builtin.sysctl:
+#     name: vm.max_map_count
+#     value: "262144"
+#     sysctl_set: yes
+#     ignoreerrors: yes
+#     state: present
+#     reload: yes
+#   become: true
+
+- name: Set Swappiness to 1
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.conf
+    line: 'vm.swappiness=1'
+    regexp: "^vm.swappiness.*$"
+    state: present
+  become: true
+  notify: "sysctl changed"
+
+- name: Set Locked Memory to Unlimited
+  ansible.builtin.lineinfile:
+    path: /usr/lib/systemd/system/elasticsearch.service
+    line: 'LimitMEMLOCK=infinity'
+    regexp: "^LimitMEMLOCK.*$"
+    state: present
+    insertafter: "# Specifies the maximum size of virtual memory"
+  become: true
+  notify: "Service changed"
+
+- name: Remove default PKI
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop:
+    - path: "/etc/elasticsearch/certs/http_ca.crt"
+    - path: "/etc/elasticsearch/certs/http.p12"
+    - path: "/etc/elasticsearch/certs/transport.p12"
+  become: true
+
+- name: Set ownership of config directory
+  ansible.builtin.file:
+    path: /etc/elasticsearch/
+    mode: '0770'
+  become: true
+
+- name: Set ownership of log directory
+  ansible.builtin.file:
+    path: /var/log/elasticsearch
+    mode: '0764'
+    owner: elasticsearch
+    group: root
+  become: true
+
+- name: Set ownership of {{ pathData }}
+  ansible.builtin.file:
+    state: directory
+    path: "{{ pathData }}"
+    owner: elasticsearch
+    group: elasticsearch
+    mode: '2750'
+  become: true
+
+- name: Ensure certs directory exists
+  ansible.builtin.file:
+    path: /etc/elasticsearch/certs
+    state: directory
+    owner: root
+    group: elasticsearch
+    mode: '0770'
+  become: true
+
+- name: Copy Certificates to Elasticsearch Conf Dir
+  copy:
+    src: "certificates/{{ item.src }}"
+    dest: /etc/elasticsearch/certs/{{ item.src }}
+    group: elasticsearch
+    mode: '0640'
+  loop:
+    - src: "{{ hostCert }}"
+    - src: "{{ hostKey }}"
+    - src: "{{ hostCA }}"
+  register: esCert
+  notify: Restart Elasticsearch
+  become: true
+
+- name: Template Elasticsearch Config
+  ansible.builtin.template:
+    src: templates/elasticsearch.yml.j2
+    dest: /etc/elasticsearch/elasticsearch.yml
+    group: elasticsearch
+    mode: '0644'
+  register: esTemplate
+  notify: Restart Elasticsearch
+  become: true
+
+- name: Set JVM Heap Size
+  ansible.builtin.template:
+    src: templates/heap.options.j2
+    dest: /etc/elasticsearch/jvm.options.d/heap.options
+    mode: '0644'
+  register: esJVM
+  notify: Restart Elasticsearch
+  become: true
+
+- name: Create password hash for consistency check
+  ansible.builtin.lineinfile:
+    path: /etc/elasticsearch/keystore.hash
+    line: elasticPassword:{{ elasticPassword | password_hash('sha256', 65534 | random(seed=inventory_hostname) | string) }}
+    regexp: ^elasticPassword.*
+    state: present
+    mode: '0600'
+    owner: root
+    group: root
+    create: true
+  become: true
+  notify: Rebuild Keystore
+  register: esKeystore
+
+- ansible.builtin.set_fact:
+    esNeedsRestart: restart
+  when: esCert.changed or esTemplate.changed or esKeystore.changed or esJVM.changed or esPackage.changed
+
+- ansible.builtin.meta: flush_handlers
+
+- name: Start Elasticsearch Service
+  ansible.builtin.service:
+    name: elasticsearch
+    state: started
+    enabled: true
+  become: true
+  when: rollingRestart is false

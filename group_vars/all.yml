@@ -1,0 +1,37 @@
+# esAPI uses the first host in the Elasticsearch group to check status
+# To use HAProxy as the API endpoint, uncomment the line below and comment the line referencing groups['elasticsearch']
+# esAPI: "https://{{ groups['haproxy'][0] }}:9200"
+esAPI: "https://{{ groups['elasticsearch'][0] }}:9200"
+
+# ===== Basic Config Variables ===== #
+esVersion: 9.1.2
+platform: "amd64.deb"
+
+# Install PGP key? (yes/no)
+pgpKey: "yes"
+
+# ===== Deployment Type ===== #
+# Choose from the following depending on your environment:
+# openInternet -- Ansible can reach the internet
+# airGap       -- Environment cannot reach the internet; you will provide GPG key & binaries
+deploymentType: "openInternet"
+
+
+
+
+
+
+# Set rollingRestart to false if recovering from complete failure (i.e., all nodes offline)
+# This will prevent nodes from waiting for the cluster to become green
+rollingRestart: false
+
+# Define custom repo path if not using Elastic's public repo
+# esRepoPath:
+
+# ===== Certs ===== #
+# Define certs, keys, and CA. These should be in certificates directory
+# 1 cert/key pair per host and 1 CA for the cluster is standard
+# Can also support wildcard or multi-SAN certificates
+hostCert: "{{ inventory_hostname }}.crt"
+hostKey: "{{ inventory_hostname }}.key"
+hostCA: "ca.crt"

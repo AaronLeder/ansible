@@ -3,11 +3,11 @@ all:
   hosts:
     localhost:
       ansible_host: 192.168.100.221    
-    ubuntu1:
+    ubuntu001:
       ansible_host: 192.168.100.29
-    ubuntu2:
+    ubuntu002:
       ansible_host: 192.168.100.173
-    ubuntu3:
+    ubuntu003:
       ansible_host: 192.168.100.14
-    ubuntu4:
+    ubuntu004:
       ansible_host: 192.168.100.235
