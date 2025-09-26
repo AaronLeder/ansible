@@ -1,13 +1,15 @@
 all:
   vars:
   hosts:
-    localhost:
-      ansible_host: 192.168.100.221    
+    maint001:
+      ansible_host: 192.168.29.2 
     ubuntu001:
-      ansible_host: 192.168.100.29
+      ansible_host: 192.168.30.11
     ubuntu002:
-      ansible_host: 192.168.100.173
+      ansible_host: 192.168.30.12
     ubuntu003:
-      ansible_host: 192.168.100.14
+      ansible_host: 192.168.30.13
     ubuntu004:
-      ansible_host: 192.168.100.235
+      ansible_host: 192.168.30.14
+    ubuntu005:
+      ansible_host: 192.168.30.15

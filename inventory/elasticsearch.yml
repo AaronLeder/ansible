@@ -1,20 +1,22 @@
 all:
   vars:
     # Cluster name for Elasticsearch
-    clusterName: "my-cluster"
+    clusterName: "aaron-dev"
     # Optional environment variable
-    esEnvironment: "my-cluster"
+    esEnvironment: "aaron-dev"
     ansible_ssh_user: "test"
     #ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
   hosts:
-    ubuntu001:
-      ansible_host: 192.168.100.155
-    ubuntu002:
-      ansible_host: 192.168.100.234
-    ubuntu003:
-      ansible_host: 192.168.100.236
-    ubuntu004:
-      ansible_host: 192.168.100.54
+    ubuntu001.elastic.pve:
+      ansible_host: 192.168.30.11
+    ubuntu002.elastic.pve:
+      ansible_host: 192.168.30.12
+    ubuntu003.elastic.pve:
+      ansible_host: 192.168.30.13
+    ubuntu004.elastic.pve:
+      ansible_host: 192.168.30.14
+    ubuntu005.elastic.pve:
+      ansible_host: 192.168.30.15
 
 
 elasticsearch:
@@ -24,19 +26,20 @@ elasticsearch:
     ubuntu001:
     ubuntu002:
     ubuntu003:
+    ubuntu004:
 
 kibana:
   hosts:
-    ubuntu004:
+    ubuntu005:
 
 logstash:
   hosts:
-    ubuntu004:
+    ubuntu005:
 
 haproxy:
   hosts:
-    ubuntu004:
+    ubuntu005:
 
 fleet_server:
   hosts:
-    ubuntu004:
+    ubuntu005:

@@ -13,6 +13,10 @@ elasticsearchConfigs:
   - name: "All-in-one"
     roles: ["master", "data_hot", "ingest", "ml", "transform", "remote_cluster_client"]
     hosts: ["ubuntu001", "ubuntu002", "ubuntu003"]
+
+  - name: "Frozen Nodes"
+    roles: ["data_frozen", "remote_cluster_client"]
+    hosts: ["ubuntu004"]
   
   # - name: "Dedicated Master"
   #   roles: ["master"]

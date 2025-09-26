@@ -1,0 +1,179 @@
+---
+# Uncomment the tasks below if they are required for your environment
+# - name: Copy ssh key
+#   ansible.builtin.command:
+#     cmd: "ssh-copy-id {{ ansible_host }}"
+#   delegate_to: localhost
+#   changed_when: false
+#
+# - name: Disable fapolicyd
+#   ansible.builtin.systemd:
+#     name: fapolicyd
+#     state: stopped
+#     enabled: false
+#   become: true
+#
+# - name: Remove noexec from /tmp
+#   ansible.builtin.lineinfile:
+#     path: /etc/fstab
+#     regexp: ^/dev/mapper/rhel-tmp.*$
+#     line: "/dev/mapper/rhel-tmp    /tmp                    xfs     nodev,nosuid 0 0"
+#   become: true
+#   notify: Reboot host
+#
+# - name: Set hostname
+#   ansible.builtin.hostname:
+#     name: "{{ inventory_hostname }}"
+#   become: true
+#
+# - name: Disable SELinux
+#   ansible.builtin.lineinfile:
+#     path: /etc/sysconfig/selinux
+#     line: "SELINUX=permissive"
+#     regexp: "^SELINUX=.*$"
+#     state: present
+#   become: true
+
+- name: Install ssh-pass
+  ansible.builtin.package:
+    name: ssh-pass
+    state: present
+
+- name: Clean certificates directory
+  ansible.builtin.file:
+    path: certificates/elastic/
+    state: absent
+  delegate_to: localhost
+
+- name: Make certificates directory
+  ansible.builtin.file:
+    path: certificates/elastic/
+    state: directory
+  delegate_to: localhost
+
+# ===== With Community Crypto ===== #
+- name: With Community Crypto
+  when: communityCrypto == true
+  block: 
+    # Install community crypto if not installed, and deploymentType: "openInternet"
+    - name: Verify ansible.community.crypto is installed
+      ansible.builtin.command: ansible-galaxy collection install community.crypto
+      when: deploymentType == openInternet
+    
+    # Generate CA private key
+    - name: Generate CA private key
+      community.crypto.openssl_privatekey:
+        path: ./certificates/elastic/ca.key
+        size: 2048
+        type: RSA
+      delegate_to: localhost
+      run_once: true
+
+    # Generate CA certificate (self-signed)
+    - name: Generate CA certificate
+      community.crypto.x509_certificate:
+        path: ./certificates/elastic/ca.crt
+        privatekey_path: ./certificates/elastic/ca.key
+        provider: selfsigned
+        subject:
+          C: US
+          ST: Atropia
+          L: Krasnovia
+          O: Self
+          OU: Self
+          CN: Ansible Generated CA
+        days: 1000
+      delegate_to: localhost
+      run_once: true
+
+    # Generate server EC private key
+    - name: Generate server EC private key
+      community.crypto.openssl_privatekey:
+        path: "./certificates/elastic/{{ inventory_hostname }}.key"
+        type: EC
+        curve: secp384r1
+      delegate_to: localhost
+
+    # Generate server certificate signing request (CSR)
+    - name: Generate server certificate signing request
+      community.crypto.openssl_csr:
+        path: "./certificates/elastic/{{ inventory_hostname }}.csr"
+        privatekey_path: "./certificates/elastic/{{ inventory_hostname }}.key"
+        subject:
+          CN: "{{ inventory_hostname }}"
+      delegate_to: localhost
+
+    # Sign server certificate with CA
+    - name: Sign server certificate with CA
+      community.crypto.x509_certificate:
+        path: "./certificates/elastic/{{ inventory_hostname }}.crt"
+        csr_path: "./certificates/elastic/{{ inventory_hostname }}.csr"
+        provider: ownca
+        ownca_path: ./certificates/elastic/ca.crt
+        ownca_privatekey_path: ./certificates/elastic/ca.key
+        days: 1000
+      delegate_to: localhost
+
+# ===== Without Community Crypto ===== #
+- name: Without Community Crypto
+  when: communityCrypto == false
+  block: 
+    - name: Generate CA key
+      ansible.builtin.command:
+        cmd: "openssl genrsa -out ./certificates/elastic/ca.key 2048"
+        creates: "./certificates/elastic/ca.key"
+      run_once: true
+      delegate_to: localhost
+    
+    - name: Generate CA certificates
+      ansible.builtin.command:
+        cmd: "openssl req -x509 -new -nodes -key ./certificates/elastic/ca.key -sha256 -days 1000 -out ./certificates/elastic/ca.crt -subj '/C=US/ST=Atropia/L=Krasnovia/O=Self/OU=Self/CN=Ansible Generated CA'"
+        creates: "./certificates/elastic/ca.crt"
+      run_once: true
+      delegate_to: localhost
+    
+    - name: Generate private keys
+      ansible.builtin.command:
+        # cmd: "openssl genrsa -out ./certificates/elastic/{{ inventory_hostname }}.key 2048"
+        cmd: "openssl ecparam -name secp384r1 -genkey -noout -out ./certificates/elastic/{{ inventory_hostname }}.key"
+        creates: ./certificates/elastic/{{ inventory_hostname }}.key
+      delegate_to: localhost
+    
+    - name: Generate CSR Configs
+      template:
+        src: templates/server.csr
+        dest: "./certificates/elastic/{{ inventory_hostname }}.csr.conf"
+      delegate_to: localhost
+      register: csrConfig
+    
+    - name: Generate CSRs
+      ansible.builtin.command:
+        cmd: "openssl req -new -key ./certificates/elastic/{{ inventory_hostname }}.key -out ./certificates/elastic/{{ inventory_hostname }}.csr -config ./certificates/elastic/{{ inventory_hostname }}.csr.conf"
+      delegate_to: localhost
+      when: csrConfig.changed
+    
+    - name: Generate Cert Configs
+      template:
+        src: templates/cert.conf
+        dest: "./certificates/elastic/{{ inventory_hostname }}.crt.conf"
+      delegate_to: localhost
+      register: certConfig
+    
+    - name: Sign CSRs
+      ansible.builtin.command:
+        cmd: "openssl x509 -req -in ./certificates/elastic/{{ inventory_hostname }}.csr -CA ./certificates/elastic/ca.crt -CAkey ./certificates/elastic/ca.key -out ./certificates/elastic/{{ inventory_hostname }}.crt -days 1000 -sha256 -extfile ./certificates/elastic/{{ inventory_hostname }}.crt.conf"
+      delegate_to: localhost
+      when: certConfig.changed
+    
+- name: Build hosts file
+  ansible.builtin.lineinfile: 
+    dest: /etc/hosts
+    regexp: '.*{{ item }}$' 
+    line: "{{ hostvars[item]['ansible_host'] }} {{ item }}" 
+    state: present
+  when: hostvars[item]['ansible_host'] is defined
+  with_items: "{{ groups['all'] }}"
+  become: true
+
+- name: Gather facts
+  ansible.builtin.gather_facts:

@@ -10,6 +10,13 @@ platform: "amd64.deb"
 # Install PGP key? (yes/no)
 pgpKey: "yes"
 
+# Are you using the ansible.community.crypto collection? (true/false)
+communityCrypto: "true"
+
+# Do you have your own signed certs? (true/false)
+# You are responsible for providing ca, crt, key, for each host, if true!
+ownCerts: "false"
+
 # ===== Deployment Type ===== #
 # Choose from the following depending on your environment:
 # openInternet -- Ansible can reach the internet
