@@ -1,7 +1,0 @@
----
-- name: Update .bashrc on remote hosts with custom colors and prompt
-  hosts: all
-  become: yes
-  gather_facts: false
-  roles: 
-    - rhel-configure-bashrc

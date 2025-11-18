@@ -1,9 +1,0 @@
----
-- name: Update and upgrade all Ubuntu/Debian systems
-  hosts: all
-  order: sorted
-  serial: 1
-  become: true
-  gather_facts: true
-  roles:
-    - ubuntu-patch-bare-metal

@@ -1,5 +1,0 @@
----
-- name: Install kubectl on Debian/Ubuntu
-  hosts: 
-  become: true
-  gather_facts: true

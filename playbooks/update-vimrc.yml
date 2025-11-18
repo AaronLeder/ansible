@@ -1,9 +1,0 @@
----
-- name: Update .vimrc on remote hosts with custom colors
-  hosts: all
-  become: yes
-  gather_facts: false
-  roles:
-    - modify-vimrc
-  vars:
-    user: "user"
