@@ -1,0 +1,202 @@
+---
+# ===== Endpoints ===== #
+- name: 
+  ansible.builtin.set_fact:  
+    kibana_base_url: "https://aaron-obs-test.kb.us-central1.gcp.cloud.es.io:9243"
+    es_base_url: "https://<elasticsearch_host>:9200"
+
+# ===== Auth (use Ansible Vault for the password!) ===== #
+- name: Auth to Cluster Facts
+  ansible.builtin.set_fact: 
+    kibana_username: "aaron"
+    kibana_password: "{{ vault_kibana_password }}"
+
+# ===== TLS ===== #
+- name: TLS Fact for Connection
+  ansible.builtin.set_fact: 
+    validate_certs: true
+
+# ===== Rule settings ===== #
+- name: Setting facts for rules
+  ansible.builtin.set_fact: 
+    rule_name: "Disk Usage Alert"
+    rule_consumer: "alerts"
+    rule_type_id: "monitoring_alert_disk_usage"
+    rule_enabled: true
+    rule_interval: "1h"
+    rule_tags: ["disk-usage"]
+    rule_duration: "1h"
+    rule_threshold: [80]
+
+- name: Get existing connectors
+  ansible.builtin.uri:
+    url: "{{ kibana_base_url }}/api/actions/connectors"
+    method: GET
+    user: "{{ kibana_username }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    validate_certs: "{{ validate_certs }}"
+    return_content: true
+  register: existing_connectors
+
+- name: Pick connector id if it already exists
+  ansible.builtin.set_fact:
+    connector_id: >-
+      {{
+        (existing_connectors.json
+          | selectattr('name','equalto','disk-usage-alerts-connector')
+          | list | first).id
+        if (existing_connectors.json
+            | selectattr('name','equalto','disk-usage-alerts-connector')
+            | list | length) > 0
+        else omit
+      }
+
+- name: Create index connector
+  ansible.builtin.uri:
+    url: "{{ kibana_base_url }}/api/actions/connector?pretty"
+    method: POST
+    user: "{{ kibana_username }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    validate_certs: "{{ validate_certs }}"
+    body_format: json
+    body:
+      name: "disk-usage-alerts-connector"
+      connector_type_id: ".index"
+      config:
+        index: "disk-usage-alerts"
+        refresh: true
+        executionTimeField: null
+  register: create_connector
+  when: connector_id is not defined
+
+- name: Set connector_id from creation response
+  ansible.builtin.set_fact:
+    connector_id: "{{ create_connector.json.id }}"
+  when: connector_id is not defined
+
+- name: Find existing rule by name
+  ansible.builtin.uri:
+    url: "{{ kibana_base_url }}/api/alerting/rules/_find?per_page=100&search_fields=name&search={{ rule_name | urlencode }}"
+    method: GET
+    user: "{{ kibana_username }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    validate_certs: "{{ validate_certs }}"
+    return_content: true
+  register: _rules
+
+- name: Extract existing rule id (if any)
+  ansible.builtin.set_fact:
+    rule_id: >-
+      {{
+        (_rules.json.data | selectattr('name','equalto', rule_name) | list | first).id
+        if (_rules.json.data | selectattr('name','equalto', rule_name) | list | length) > 0
+        else omit
+      }}
+
+- name: Build rule request body
+  ansible.builtin.set_fact:
+    _rule_body:
+      name: "{{ rule_name }}"
+      consumer: "{{ rule_consumer }}"
+      notify_when: "onActiveAlert"
+      rule_type_id: "{{ rule_type_id }}"
+      enabled: "{{ rule_enabled }}"
+      schedule:
+        interval: "{{ rule_interval }}"
+      tags: "{{ rule_tags }}"
+      params:
+        duration: "{{ rule_duration }}"
+        threshold: "{{ rule_threshold }}"
+      actions:
+        - group: "default"
+          id: "{{ connector_id }}"
+          params:
+            documents:
+              - "@timestamp": "{% raw %}{{date}}{% endraw %}"
+                "host.name": "{% raw %}{{context.nodes}}{% endraw %}"
+                "rule.name": "{% raw %}{{rule.name}}{% endraw %}"
+                "rule.id": "{% raw %}{{rule.id}}{% endraw %}"
+                "rule.type": "{% raw %}{{rule.type}}{% endraw %}"
+                "rule.space": "{% raw %}{{rule.spaceId}}{% endraw %}"
+                message: "{% raw %}{{context}}{% endraw %}"
+                "event.reason": "{% raw %}{{context.internalShortMessage}}{% endraw %}"
+                "event.kind": "alert"
+                "event.id": "{% raw %}{{alert.id}}{% endraw %}"
+
+- name: Create alert rule (if missing)
+  ansible.builtin.uri:
+    url: "{{ kibana_base_url }}/api/alerting/rule"
+    method: POST
+    user: "{{ kibana_username }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    validate_certs: "{{ validate_certs }}"
+    body_format: json
+    body: "{{ _rule_body }}"
+  register: _rule_create
+  when: rule_id is not defined
+
+- name: Update alert rule (if exists)
+  ansible.builtin.uri:
+    url: "{{ kibana_base_url }}/api/alerting/rule/{{ rule_id }}"
+    method: PUT
+    user: "{{ kibana_username }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: true
+    headers:
+      kbn-xsrf: "true"
+      Content-Type: "application/json"
+    validate_certs: "{{ validate_certs }}"
+    body_format: json
+    body: "{{ _rule_body }}"
+  register: _rule_update
+  when: rule_id is defined
+
+- name: Ensure index template for disk-usage-alerts
+  ansible.builtin.uri:
+    url: "{{ es_base_url }}/_index_template/disk-usage-alerts-template"
+    method: PUT
+    user: "{{ kibana_username }}"
+    password: "{{ kibana_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ validate_certs }}"
+    headers:
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      index_patterns: ["disk-usage-alerts"]
+      data_stream: {}
+      template:
+        mappings:
+          properties:
+            host:
+              properties:
+                name: { type: "keyword" }
+            rule:
+              properties:
+                name:  { type: "keyword" }
+                id:    { type: "keyword" }
+                type:  { type: "keyword" }
+                space: { type: "keyword" }
+            event:
+              properties:
+                reason: { type: "keyword" }
+                kind:   { type: "keyword" }
+                id:     { type: "keyword" }
+            message: { type: "text" }
+
