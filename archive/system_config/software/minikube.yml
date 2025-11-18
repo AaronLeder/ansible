@@ -3,7 +3,7 @@
 # Minikube start guide
 # https://minikube.sigs.k8s.io/docs/start/?arch=%2Flinux%2Fx86-64%2Fstable%2Fbinary+download
 # Using this playbook, you are assumed to be using
-# OS: Linux
+# OS: Ubuntu/Debian
 # Architecture: x86-64
 # Release Type: Stable
 # Installer Type: Binary Download
