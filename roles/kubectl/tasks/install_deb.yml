@@ -1,0 +1,47 @@
+- name: Ensure required packages are installed
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+
+- name: Ensure /etc/apt/keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download Kubernetes APT key (ASCII)
+  ansible.builtin.get_url:
+    url: https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key
+    dest: /tmp/kubernetes-apt-keyring.asc
+    mode: "0644"
+
+- name: De-armor Kubernetes APT key
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/kubernetes-apt-keyring.asc
+    creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+- name: Set permissions on Kubernetes keyring
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    mode: "0644"
+
+- name: Configure Kubernetes APT repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/kubernetes.list
+    content: |
+      deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.34/deb/ /
+    mode: "0644"
+
+- name: Update APT cache after adding Kubernetes repo
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install kubectl
+  ansible.builtin.apt:
+    name: kubectl
+    state: present

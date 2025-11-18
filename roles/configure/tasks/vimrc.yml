@@ -1,0 +1,12 @@
+---
+- name: Root -- Ensure only the required content is in .vimrc
+  ansible.builtin.copy:
+    dest: ~/.vimrc
+    content: |
+      colorscheme desert
+
+- name: "{{ user }} -- Ensure only the required content is in .vimrc"
+  ansible.builtin.copy:
+    dest: /home/{{ user }}/.vimrc
+    content: |
+      colorscheme desert

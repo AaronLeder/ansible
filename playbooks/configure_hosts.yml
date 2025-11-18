@@ -1,0 +1,55 @@
+---
+# ================== READ ME ================== #
+
+
+
+# ================== READ ME ================== #
+- name: Configure bashrc on hosts
+  hosts: 
+  become: true
+  gather_facts: true
+  roles:
+    - configure
+  tags:
+    - bashrc
+  vars:
+    user: "user"
+
+# ================== READ ME ================== #
+
+# I have only ever tried this on RHEL 7 & 8.
+# I don't know if it works on any other OS.
+
+# `gather_facts: true` is because we need to check
+# the status of SELinux.
+
+# running `restorecon` is best practice when
+# working in an environment with SELinux 
+
+# ================== READ ME ================== #
+
+- name: Configure ifup-local script for NIC tuning
+  hosts: 
+  become: true
+  gather_facts: true
+  roles:
+    - configure
+  tags:
+    - ifup_local
+  vars:
+    # Name of your NIC interface
+    NIC_Name: "eno6"
+
+# ================== READ ME ================== #
+
+
+
+# ================== READ ME ================== #
+- name: Configure vimrc on hosts
+  hosts: 
+  become: true
+  gather_facts: true
+  roles:
+    - configure
+  tags:
+    - vimrc

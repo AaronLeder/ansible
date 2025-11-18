@@ -1,0 +1,7 @@
+---
+- name: Add timestamps to .bashrc
+  ansible.builtin.lineinfile:
+    path: ~/.bashrc
+    line: 'HISTTIMEFORMAT="%d/%m/%y %T "' >> ~/.bashrc
+    create: yes
+    state: present

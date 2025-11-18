@@ -1,0 +1,23 @@
+---
+- name: Update .bashrc on Deb systems
+  when: ansible_facts['os_family'] == "Debian"
+  ansible.builtin.include_tasks: ubuntu_bashrc.yml
+  tags: 
+    - bashrc
+
+- name: Update .bashrc on RedHat systems
+  when: ansible_facts['os_family'] == "RedHat"
+  ansible.builtin.include_tasks: rhel_bashrc.yml
+  tags: 
+    - bashrc
+
+- name: Update ifup-local on RedHat systems
+  when: ansible_facts['os_family'] == "RedHat"
+  ansible.builtin.include_tasks: rhel_ifup_local.yml
+  tags: 
+    - ifup_local
+
+- name: Update .vimrc
+  ansible.builtin.include_tasks: vimrc.yml
+  tags:
+    - vimrc
