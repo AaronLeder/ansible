@@ -1,5 +1,5 @@
 ---
-- name: Update and upgrade all Ubuntu/Debian systems
+- name: Update and upgrade all systems
   hosts: all
   order: sorted
   serial: 1
