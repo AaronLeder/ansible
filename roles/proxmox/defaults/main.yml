@@ -1,0 +1,4 @@
+---
+proxmox_validate_certs: false
+proxmox_shutdown_timeout: 300
+proxmox_vms: []

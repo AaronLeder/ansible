@@ -1,0 +1,5 @@
+---
+- name: Gracefully stop Proxmox VMs
+  ansible.builtin.include_tasks: shutdown_proxmox_vms.yml
+  tags:
+    - shutdown_proxmox_vms

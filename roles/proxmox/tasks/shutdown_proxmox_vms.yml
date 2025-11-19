@@ -1,0 +1,13 @@
+---
+- name: Gracefully stop Proxmox VMs via API
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+    vmid: "{{ item }}"
+    state: stopped        # graceful shutdown
+    force: false          # don't hard-stop unless timeout kicks in
+    timeout: "{{ proxmox_shutdown_timeout | default(300) }}"
+  loop: "{{ proxmox_vms }}"
