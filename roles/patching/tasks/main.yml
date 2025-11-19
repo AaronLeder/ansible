@@ -1,4 +1,36 @@
 ---
-- name:
-  when: ansible_facts['os_family'] == "Debian"
-  ansible.builtin.include_tasks: patch_ubuntu.yml
+- name: Patch hosts that use "apt" package manager
+  when: ansible_facts.pkg_mgr == "apt"
+  ansible.builtin.include_tasks: patch_apt.yml
+
+- name: Patch hosts that use "dnf" package manager
+  when: ansible_facts.pkg_mgr in ["dnf", "yum"]
+  ansible.builtin.include_tasks: patch_dnf.yml
+
+- name: Give hosts time to crash after reboot
+  ansible.builtin.pause:
+    minutes: 2
+    echo: "Waiting to see if hosts crash after reboot"
+
+- name: Wait for host to come back after reboot (SSH)
+  ansible.builtin.wait_for_connection:
+    delay: 60
+    timeout: 360
+  register: conn_result
+  ignore_errors: true
+
+- name: Tag hosts that failed to reconnect
+  ansible.builtin.add_host:
+    name: "{{ inventory_hostname }}"
+    groups: reboot_failed
+  when: conn_result is failed
+
+- name: Fail entire play if any host did not come back
+  ansible.builtin.fail:
+    msg: >-
+      The following hosts did not come back after reboot:
+      {{ groups['reboot_failed'] | join(', ') }}
+  when:
+    - groups['reboot_failed'] is defined
+    - groups['reboot_failed'] | length > 0
+  run_once: true

@@ -1,0 +1,13 @@
+---
+- name: Get list of services
+  ansible.builtin.service_facts:
+
+- name: Stop services
+  ansible.builtin.include_tasks: stop_services.yml
+  tags:
+    - stop_services
+
+- name: Start services
+  ansible.builtin.include_tasks: start_services.yml
+  tags:
+    - start_services

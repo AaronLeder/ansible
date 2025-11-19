@@ -1,0 +1,16 @@
+---
+- name: Modify services
+  hosts: all
+  order: sorted
+  gather_facts: false
+  roles:
+    - services
+  apply:
+    tags: 
+      - services
+  vars:
+    services_to_check:
+      - elasticsearch.service
+      - kibana.service
+      - logstash.service
+      #- fleet.service

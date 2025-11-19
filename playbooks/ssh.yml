@@ -1,0 +1,7 @@
+---
+- name: Share SSH pub key(s)
+  hosts: all
+  order: sorted
+  gather_facts: false
+  roles:
+    - ssh

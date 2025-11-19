@@ -21,3 +21,8 @@
   ansible.builtin.include_tasks: vimrc.yml
   tags:
     - vimrc
+
+- name: Update hostname
+  ansible.builtin.include_tasks: hostname.yml
+  tags:
+    - hostname

@@ -1,0 +1,6 @@
+---
+- name: Copy SSH public key to remote hosts
+  ansible.posix.authorized_key:
+    user: user # remote user account
+    state: present
+    key: "{{ lookup('file', '/home/user/.ssh/ansible.pub') }}"

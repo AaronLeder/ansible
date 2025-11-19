@@ -1,8 +1,8 @@
 all:
   vars:
   hosts:
-    maint001:
-      ansible_host: 192.168.29.2 
+#    maint001:
+#      ansible_host: 192.168.29.2 
     ubuntu001:
       ansible_host: 192.168.30.11
     ubuntu002:
