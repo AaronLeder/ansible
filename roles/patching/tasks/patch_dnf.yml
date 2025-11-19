@@ -1,1 +1,36 @@
 ---
+- name: Update DNF/YUM package cache
+  ansible.builtin.dnf:
+    update_cache: true
+
+- name: Upgrade all packages to latest
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    autoremove: true       # remove unused deps if supported
+
+# needs-restarting comes from yum-utils or dnf-utils depending on distro
+- name: Ensure needs-restarting is available
+  ansible.builtin.dnf:
+    name:
+      - yum-utils          # RHEL/CentOS 7
+      - dnf-utils          # RHEL 8+/Rocky/Alma (no-op if not found)
+    state: present
+  when: ansible_pkg_mgr in ['dnf', 'yum']
+
+- name: Check if reboot is required
+  become: true
+  ansible.builtin.command: needs-restarting -r
+  register: reboot_check
+  failed_when: reboot_check.rc not in [0, 1]
+  changed_when: reboot_check.rc == 1
+
+- name: Reboot the system if required
+  become: true
+  ansible.builtin.reboot:
+    msg: "System reboot initiated by Ansible after patching."
+    connect_timeout: 5
+    reboot_timeout: 300
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+  when: reboot_check.rc == 1
