@@ -1,1 +1,11 @@
 ---
+- name: Start and enable services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ managed_services | default([]) }}"
+  tags:
+    - start_elastic
+
+# add uri module to set cluster to null

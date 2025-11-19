@@ -1,1 +1,11 @@
 ---
+# add uri module to set cluster to primaries
+
+- name: Stop and disable services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ managed_services | default([]) }}"
+  tags:
+    - stop_elastic

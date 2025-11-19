@@ -14,3 +14,4 @@
       - kibana.service
       - logstash.service
       #- fleet.service
+      - elastic-agent.service

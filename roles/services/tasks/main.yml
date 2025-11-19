@@ -2,12 +2,23 @@
 - name: Get list of services
   ansible.builtin.service_facts:
 
+- name: Build list of services that exist on remote host
+  ansible.builtin.set_fact:
+    managed_services: >-
+      {{
+        services_to_check
+        | select('in', ansible_facts.services.keys() | list)
+        | list
+      }}
+
 - name: Stop services
   ansible.builtin.include_tasks: stop_services.yml
   tags:
     - stop_services
+    - stop_elastic
 
 - name: Start services
   ansible.builtin.include_tasks: start_services.yml
   tags:
     - start_services
+    - start_elastic
