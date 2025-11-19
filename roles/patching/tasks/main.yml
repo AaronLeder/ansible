@@ -12,7 +12,7 @@
     minutes: 2
     echo: "Waiting to see if hosts crash after reboot"
 
-- name: Wait for host to come back after reboot (SSH)
+- name: Wait for remote host to possibly fail after reboot (SSH)
   ansible.builtin.wait_for_connection:
     delay: 60
     timeout: 360
