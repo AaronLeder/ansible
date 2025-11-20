@@ -1,9 +1,12 @@
 # Role: connectivity
 Check for connectivity with remote hosts.
 
-
-## Notes:
-
+## Usage
+```
+ansible-playbook playbooks/<name>.yml -t ping
+```
 
 ## Available tags
 * ping
+
+## Notes:
