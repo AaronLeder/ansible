@@ -1,3 +1,9 @@
 # ========== Ansible ========== #
 archive/*
-elastic/
+#elastic-aaron/
+
+packages/*.deb
+packages/*.rpm
+packages/*.tar.gz
+packages/*.zip
+packages/!.gitkeep
