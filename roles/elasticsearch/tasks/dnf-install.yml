@@ -1,0 +1,28 @@
+---
+- name: Add Elasticsearch Repo (RHEL)
+  ansible.builtin.yum_repository:
+    name: elasticsearch-9.x
+    baseurl:
+      - "{{ esRepoPath | default('https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{ elastic_install }}') }}"
+    gpgcheck: 0
+    enabled: 1
+    priority: 1
+    description: "Elasticsearch 9.x repo"
+  register: esPackage
+  become: true
+
+- name: Install Elasticsearch
+  ansible.builtin.package:
+    name: elasticsearch-{{ esVersion }}
+    state: present
+  become: true
+  notify: Restart Elasticsearch
+  register: esPackage
+
+- name: Allow Firewall Ports
+  ansible.builtin.shell: "firewall-cmd --add-port {{ item }} --permanent && firewall-cmd --reload"
+  loop:
+    - 9200/tcp
+    - 9300/tcp
+  become: true
+  changed_when: false
