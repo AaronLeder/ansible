@@ -1,0 +1,83 @@
+---
+- name: Declare location of directory for PKI storage
+  ansible.builtin.set_fact:
+    certs_dir: "{{ playbook_dir }}/certificates/elastic"
+
+# We can run into issues if the directory already has files.
+# "Cleaning" (removing, then recreating) solves this.
+- name: Localhost & tasks to be ran run_once
+  delegate_to: localhost
+  run_once: true
+  block: 
+    - name: Remove certificates directory
+      ansible.builtin.file:
+        path: "{{ certs_dir }}"
+        state: absent
+
+    - name: Make certificates directory
+      ansible.builtin.file:
+        path: "{{ certs_dir }}"
+        state: directory
+        mode: "0755"
+
+    # Install community.crypto if not installed
+    - name: Ensure community.crypto collection is installed
+      ansible.builtin.command: ansible-galaxy collection install community.crypto
+      changed_when: false
+
+    - name: Generate CA private key
+      community.crypto.openssl_privatekey:
+        path: "{{ certs_dir }}/ca.key"
+        size: 2048
+        type: RSA
+
+    - name: Generate CA CSR
+      community.crypto.openssl_csr:
+        path: "{{ certs_dir }}/ca.csr"
+        privatekey_path: "{{ certs_dir }}/ca.key"
+        country_name: US
+        state_or_province_name: Atropia
+        locality_name: Krasnovia
+        organization_name: Self
+        organizational_unit_name: Self
+        common_name: "Ansible Generated CA"
+        basic_constraints:
+          - "CA:TRUE"
+
+    # Generate CA certificate (self-signed)
+    - name: Generate CA certificate
+      community.crypto.x509_certificate:
+        path: "{{ certs_dir }}/ca.crt"
+        privatekey_path: "{{ certs_dir }}/ca.key"
+        csr_path: "{{ certs_dir }}/ca.csr"
+        provider: selfsigned
+        selfsigned_not_before: "-1d"     # optional, valid starting yesterday
+        selfsigned_not_after: "+1000d"   # replaces `days: 1000`
+        selfsigned_version: 3
+
+- name: Jobs for localhost only
+  delegate_to: localhost
+  block:
+    - name: Generate server EC private key
+      community.crypto.openssl_privatekey:
+        path: "{{ certs_dir }}/{{ inventory_hostname }}.key"
+        type: ECC
+        curve: secp384r1
+
+    - name: Generate server certificate signing request (CSR)
+      community.crypto.openssl_csr:
+        path: "{{ certs_dir }}/{{ inventory_hostname }}.csr"
+        privatekey_path: "{{ certs_dir }}/{{ inventory_hostname }}.key"
+        subject:
+          CN: "{{ inventory_hostname }}"
+
+    - name: Sign server certificate with CA
+      community.crypto.x509_certificate:
+        path: "{{ certs_dir }}/{{ inventory_hostname }}.crt"
+        csr_path: "{{ certs_dir }}/{{ inventory_hostname }}.csr"
+        provider: ownca
+        ownca_path: "{{ certs_dir }}/ca.crt"
+        ownca_privatekey_path: "{{ certs_dir }}/ca.key"
+        ownca_not_before: "-1d"
+        ownca_not_after: "+1000d"
+        ownca_version: 3

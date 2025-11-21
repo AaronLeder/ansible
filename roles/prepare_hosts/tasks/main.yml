@@ -1,0 +1,46 @@
+---
+# Uncomment the tasks below if they are required for your environment!
+
+# - name: Disable security features for install (Linux)
+#   ansible.builtin.include_tasks: disable_security_linux.yml
+#   when: ansible_facts['os_family'] != "Windows"
+
+#- name: Install dependencies for creating key pairs
+#  when: ansible_facts.pkg_mgr == "apt"
+#  ansible.builtin.apt:
+#    name: ssh-pass
+#    state: present
+#    update_cache: true
+
+- name: Share public key to remote hosts, if not already shared
+  ansible.posix.authorized_key:
+    user: user # remote user account
+    state: present
+    key: "{{ lookup('file', '/home/user/.ssh/ansible.pub') }}"
+  tags:
+    - share_pub_key
+
+- name: Create CA, key pairs.
+  ansible.builtin.include_tasks: pki.yml
+  tags:
+    - create_pki
+
+- name: Build hosts file
+  ansible.builtin.lineinfile:
+    dest: /etc/hosts
+    regexp: '.*{{ item }}$'
+    line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
+    state: present
+    backup: true
+  when: hostvars[item]['ansible_host'] is defined
+  with_items: "{{ groups['all'] }}"
+  become: true
+  register: host_file
+  tags:
+    - update_etc_hosts
+
+- name: Ensure packages directory exists
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/packages"
+    state: directory
+    mode: '0740'

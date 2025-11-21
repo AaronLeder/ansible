@@ -1,0 +1,26 @@
+---
+- name: Disable fapolicyd
+  ansible.builtin.systemd:
+    name: fapolicyd
+    state: stopped
+    enabled: false
+  become: true
+
+- name: Remove noexec from /tmp
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: ^/dev/mapper/rhel-tmp.*$
+    line: "/dev/mapper/rhel-tmp    /tmp                    xfs     nodev,nosuid 0 0"
+  become: true
+  notify: Reboot host
+
+- name: Disable SELinux
+  ansible.builtin.lineinfile:
+    path: /etc/sysconfig/selinux
+    line: "SELINUX=permissive"
+    regexp: "^SELINUX=.*$"
+    state: present
+  become: true
+
+- name: Disable security features (Linux)
+  ansible.builtin.include_tasks: 
