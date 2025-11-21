@@ -1,0 +1,52 @@
+# esAPI uses the first host in the Elasticsearch group to check status
+# To use HAProxy as the API endpoint, uncomment the line below and comment the line referencing groups['elasticsearch']
+# esAPI: "https://{{ groups['haproxy'][0] }}:9200"
+esAPI: "https://{{ groups['elasticsearch'][0] }}:9200"
+
+# ===== Basic Config Variables ===== #
+# Select the version of Elasticsearch you want to use.
+# This will also apply to Logstash, Kibana & Fleet
+elastic_version: 9.2.1
+clusterName: "aaron-dev"
+# Which group_vars yml to use
+esEnvironment: "aaron-dev"
+pathData: "/data"
+
+# Install GPG key? (yes/no)
+gpgKey: "yes"
+elastic_gpg_key_path: /usr/share/keyrings/elasticsearch-keyring.gpg
+
+# Location of your SSH public key
+sshPub: "/home/user/.ssh/ansible.pub"
+
+# Set rollingRestart to false if recovering from complete failure (i.e., all nodes offline)
+# This will prevent nodes from waiting for the cluster to become green
+rollingRestart: false
+
+# ***** THIS DOES NOT WORK RIGHT NOW!!! ***** #
+# ===== Deployment Type ===== #
+# Choose from the following depending on your environment:
+# openInternet -- Ansible can reach the internet
+# airGap       -- Environment cannot reach the internet; you will provide GPG key & binaries
+#deploymentType: "openInternet"
+
+
+# ===== PKI ===== #
+# Do you have your own signed certs? (true/false)
+# You are responsible for providing ca, crt, key, for each host, if true!
+ownCerts: "false"
+
+# Define certs, keys, and CA. These should be in certificates directory
+# 1 cert/key pair per host and 1 CA for the cluster is standard
+# Can also support wildcard or multi-SAN certificates
+hostCert: "{{ inventory_hostname }}.crt"
+hostKey: "{{ inventory_hostname }}.key"
+hostCA: "ca.crt"
+
+# ===== Packages ===== #
+# Debian
+elastic_required_packages:
+  - apt-transport-https
+  - gpg
+  - apt-transport-https
+  - nfs-kernel-server
