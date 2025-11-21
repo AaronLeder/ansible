@@ -3,26 +3,27 @@
 # name: string, unique name for each config (required)
 # roles: comma-seperated array of strings, list of roles to enable for the configuration. Uses Elasticsearch roles verbatim (required)
 #   EX: ["master", "data_content", "data_hot"]
+#   Docs: https://www.elastic.co/docs/deploy-manage/distributed-architecture/clusters-nodes-shards/node-roles
 # heap: string, set a heap size override for Elasticsearch, defaults to auto-detect (optional)
 #   EX: "3g" or "1024m"
 # hosts: comma-seperated array of strings, list of hosts to enable the configuration for (required)
 # NOTE: As of this revision, ONLY ONE config can have the master role UNLESS the second config is also voting_only
 
 elasticsearchConfigs:
-
   - name: "All-in-one"
     roles: ["master", "data_hot", "ingest", "ml", "transform", "remote_cluster_client"]
-    hosts: ["ubuntu001", "ubuntu002", "ubuntu003"]
+    hosts: ["ubuntu002", "ubuntu003", "ubuntu004"]
+    heap: "3g"
 
-  - name: "Frozen Nodes"
-    roles: ["data_frozen", "remote_cluster_client"]
-    hosts: ["ubuntu004"]
-  
+  #- name: "Frozen Nodes"
+  #  roles: ["data_frozen", "remote_cluster_client"]
+  #  hosts: ["ubuntu004"]
+
   # - name: "Dedicated Master"
   #   roles: ["master"]
-  #   hosts:
+  #   hosts: []
   
   # - name: "Data Hot Ingest Content"
   #   roles: ["data_hot", "ingest", "data_content"]
-  #   hosts:
+  #   hosts: []
   #   heap: "31g"
