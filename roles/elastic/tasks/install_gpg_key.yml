@@ -1,0 +1,28 @@
+---
+- name: Create /usr/share/keyrings if it doesn't exist
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Copy the GPG key to remote hosts
+  ansible.builtin.copy:
+    src: packages/GPG-KEY-elasticsearch
+    dest: /etc/elasticsearch/GPG-KEY-elasticsearch
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Convert GPG key to keyring format
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --dearmor
+      - --output
+      - /usr/share/keyrings/elasticsearch-keyring.gpg
+      - /etc/elasticsearch/GPG-KEY-elasticsearch
+  args:
+    creates: /usr/share/keyrings/elasticsearch-keyring.gpg
+  become: true

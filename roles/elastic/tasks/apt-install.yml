@@ -1,0 +1,73 @@
+---
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name: "{{ elastic_required_packages }}"
+    state: present
+    update_cache: true
+  become: true
+
+# ===== Open Internet ===== #
+# Download packages to localhost, to reduce network load on WAN.
+# LAN should be faster anyways.
+- name: Open Internet ES Install
+  #when: deploymentType == openInternet
+  block:
+    - name: Download ES Binary
+      ansible.builtin.get_url:
+        url: https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{ elastic_install }}
+        dest: packages/
+      delegate_to: localhost
+
+    - name: Copy ES binary to hosts
+      ansible.builtin.copy: 
+        src: packages/elasticsearch-{{ elastic_install }}
+        dest: /etc/elasticsearch/
+        owner: elasticsearch
+        group: root
+        mode: '0770'
+
+    - name: Download Elasticsearch GPG key (ASCII armored)
+      ansible.builtin.get_url:
+        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+        dest: /tmp/elasticsearch.asc
+        mode: "0644"
+      when: gpgKey == yes
+    
+    - name: Convert Elasticsearch GPG key to keyring format
+      ansible.builtin.command:
+        cmd: gpg --dearmor --output {{ elastic_gpg_key_path }} /tmp/elasticsearch.asc
+      args:
+        creates: "{{ elastic_gpg_key_path }}"
+      become: true
+      when: gpgKey == yes
+
+# ===== Air Gap ===== #
+#- name: Air Gap ES Install
+#  when: deploymentType == airGap
+#  block:
+#    - name: Copy ES binary to hosts
+#      ansible.builtin.copy: 
+#        src: packages/elasticsearch-{{ elastic_install }}
+#        dest: /etc/elasticsearch/
+#        owner: elasticsearch
+#        group: root
+#        mode: '0770'
+#
+#    - name: Download Elasticsearch GPG key
+#      ansible.builtin.get_url:
+#        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+#        dest: /tmp/GPG-KEY-elasticsearch
+#        mode: '0644'
+#      delegate_to: localhost
+#      when: gpgKey == yes
+
+- name: Install GPG Key if chosen
+  ansible.builtin.include_tasks: install_gpg_key.yml
+  when: gpgKey == yes
+
+- name: Install Elasticsearch
+  ansible.builtin.apt:
+    deb: /etc/elasticsearch/elasticsearch={{ elastic_install }}
+  become: true
+  notify: Restart Elasticsearch
+  register: esPackage

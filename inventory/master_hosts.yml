@@ -1,15 +1,41 @@
 all:
-  vars:
-  hosts:
-#    maint001:
-#      ansible_host: 192.168.29.2 
-    ubuntu001:
-      ansible_host: 192.168.30.11
-    ubuntu002:
-      ansible_host: 192.168.30.12
-    ubuntu003:
-      ansible_host: 192.168.30.13
-    ubuntu004:
-      ansible_host: 192.168.30.14
-    ubuntu005:
-      ansible_host: 192.168.30.15
+  children:
+    
+    elasticsearch:
+      children:
+        elastic:
+        kibana:
+        logstash:
+        fleet:
+
+    elastic:
+      hosts:
+        ubuntu001.elastic.pve:
+          ansible_host: 192.168.30.11
+        ubuntu002.elastic.pve:
+          ansible_host: 192.168.30.12
+
+    kibana:
+      hosts:
+        ubuntu003.elastic.pve:
+          ansible_host: 192.168.30.13
+
+    logstash:
+      hosts:
+        ubuntu004.elastic.pve:
+          ansible_host: 192.168.30.14
+
+    fleet:
+      hosts:
+        ubuntu005.elastic.pve:
+          ansible_host: 192.168.30.15
+
+    infra:
+      hosts:
+        maint001.infra.pve:
+          ansible_host: 192.168.29.2
+
+    proxmox:
+      hosts:
+        BluePHat:
+          ansible_host: 192.168.1.126

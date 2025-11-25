@@ -1,0 +1,35 @@
+---
+- name: Check for connectivity
+  hosts: elasticsearch
+  order: sorted
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - connectivity
+  tags:
+    - ping
+    - always
+  
+- name: Prepare Hosts
+  hosts: elasticsearch
+  order: sorted
+  gather_facts: true
+  roles:
+    - prepare_hosts
+  tags:
+    - prepare_hosts
+    - share_pub_key
+    - create_pki
+    - update_etc_hosts
+    - never
+
+- name: Deploy Elastic stack
+  hosts: elasticsearch
+  become: true
+  vars_files:
+    - ../vault/elasticsearch-dev.yml
+  roles:
+    - elastic
+    #- kibana
+    #- logstash
+    #- fleet
