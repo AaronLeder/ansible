@@ -1,7 +1,9 @@
 # ========== Ansible ========== #
 archive/*
-#elastic-aaron/
+certificates/
+playbooks/certificates/
 
+# ===== Packages ===== #
 packages/*.deb
 packages/*.rpm
 packages/*.tar.gz
