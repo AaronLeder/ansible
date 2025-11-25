@@ -1,3 +1,2 @@
 export ANSIBLE_CONFIG=/path/to/ansible.cfg
 export ANSIBLE_INVENTORY=/path/to/inventory
-
