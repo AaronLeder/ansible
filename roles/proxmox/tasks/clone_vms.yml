@@ -1,0 +1,95 @@
+---
+- name: "Ensure Proxmox VM group is defined and not empty"
+  ansible.builtin.assert:
+    that:
+      - proxmox_vm_group is defined
+      - proxmox_vm_group in groups
+      - groups[proxmox_vm_group] | length > 0
+    fail_msg: >-
+      The group '{{ proxmox_vm_group | default('proxmox_vms_to_clone') }}'
+      is not defined or has no hosts. Define it in your inventory with the VMs
+      you want to clone.
+
+- name: "Clone, configure, and start VMs from inventory group"
+  delegate_to: localhost
+  loop: "{{ groups[proxmox_vm_group] }}"
+  loop_control:
+    loop_var: vm_host
+  block:
+
+    - name: "Clone source VM into new VM {{ vm_host }}"
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ proxmox_api_host }}"
+        api_port: "{{ proxmox_api_port | default(8006) }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+        node: "{{ proxmox_node }}"
+
+        # source template/VM
+        clone: "{{ proxmox_source_vm_name }}"
+
+        # new VM properties
+        name: "{{ vm_host }}"
+        description: >-
+          {{ hostvars[vm_host].proxmox_description
+             | default(proxmox_new_vm_description | default('Cloned via Ansible')) }}
+        storage: "{{ proxmox_new_vm_storage }}"
+        full: "{{ proxmox_new_vm_full_clone | default(true) }}"
+        format: "{{ proxmox_new_vm_disk_format | default('qcow2') }}"
+        timeout: "{{ proxmox_new_vm_clone_timeout | default(300) }}"
+
+        # optional explicit VMID per host
+        newid: "{{ hostvars[vm_host].proxmox_vmid | default(omit) }}"
+
+    - name: "Configure hostname and static IP for {{ vm_host }} via cloud-init"
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ proxmox_api_host }}"
+        api_port: "{{ proxmox_api_port | default(8006) }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+        node: "{{ proxmox_node }}"
+
+        # operate on the new VM by VMID if given, otherwise by name
+        vmid: "{{ hostvars[vm_host].proxmox_vmid | default(omit) }}"
+        name: "{{ vm_host }}"
+
+        # cloud-init user/pass (host override > global default)
+        ciuser: >-
+          {{ hostvars[vm_host].proxmox_ciuser
+             | default(proxmox_new_vm_ciuser) }}
+        cipassword: >-
+          {{ hostvars[vm_host].proxmox_cipassword
+             | default(proxmox_new_vm_cipassword) }}
+
+        # DNS (host override > global default)
+        nameservers: >-
+          {{ hostvars[vm_host].proxmox_dns_servers
+             | default(proxmox_new_vm_dns_servers | default([])) }}
+        searchdomains: >-
+          {{ hostvars[vm_host].proxmox_searchdomain
+             | default(proxmox_new_vm_searchdomain | default(omit)) }}
+
+        # Static IP from ansible_host + per-host prefix/gw
+        ipconfig:
+          ipconfig0: >-
+            ip={{ hostvars[vm_host].ansible_host }}/{{ hostvars[vm_host].proxmox_prefix }},
+            gw={{ hostvars[vm_host].proxmox_gateway }}
+
+        update: true
+
+    - name: "Ensure cloned VM {{ vm_host }} is started"
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ proxmox_api_host }}"
+        api_port: "{{ proxmox_api_port | default(8006) }}"
+        api_user: "{{ proxmox_api_user }}"
+        api_token_id: "{{ proxmox_api_token_id }}"
+        api_token_secret: "{{ proxmox_api_token_secret }}"
+        validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+        node: "{{ proxmox_node }}"
+        vmid: "{{ hostvars[vm_host].proxmox_vmid | default(omit) }}"
+        name: "{{ vm_host }}"
+        state: started
