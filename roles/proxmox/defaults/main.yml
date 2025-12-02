@@ -72,5 +72,6 @@ proxmox_new_vm_description: "Cloned via Ansible"
 proxmox_shutdown_timeout: 300
 
 # List of VMIDs (or VM identifiers) to apply shutdown logic to in the shutdown role.
-# Often something like [200, 201, 202]. Empty list means "no VMs specified".
+# Often something like [200, 201, 202]. 
+# Empty list means "no VMs specified".
 proxmox_vms: []

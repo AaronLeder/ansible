@@ -15,7 +15,7 @@
       - proxmox_api_token_id is defined
       - proxmox_api_token_secret is defined
     fail_msg: >
-      One or more required Proxmox variables are missing.
+      One or more required Proxmox variables are missing!
       proxmox_api_host defined: {{ proxmox_api_host is defined }} ||
       proxmox_api_user defined: {{ proxmox_api_user is defined }} ||
       proxmox_api_token_id defined: {{ proxmox_api_token_id is defined }} ||
@@ -24,11 +24,10 @@
 # ===== Network-level connectivity check (ICMP ping) ===== #
 
 - name: "Ping Proxmox API host from control node"
-  ansible.builtin.command: "ping -c1 -W1 {{ proxmox_api_host }}"
+  ansible.builtin.command: "ping -c3 -W5 {{ proxmox_api_host }}"
   register: proxmox_icmp_ping
   changed_when: false
   failed_when: proxmox_icmp_ping.rc != 0
-  delegate_to: localhost
 
 # ===== API-level connectivity + auth check ===== #
 
@@ -45,7 +44,6 @@
       Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
   register: proxmox_api_ping
   changed_when: false
-  delegate_to: localhost
 
 - name: "Verify Proxmox API response contains version data"
   ansible.builtin.assert:

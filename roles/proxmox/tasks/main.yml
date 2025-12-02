@@ -1,6 +1,8 @@
 ---
-- name: Install Proxmox Collection
+- name: Install Proxmox Collection, changed should always be true 
   ansible.builtin.command: ansible-galaxy collection install community.proxmox
+  register: ansible_proxmox
+  failed_when: ansible_proxmox.rc != 0
   tags:
     - always
 
