@@ -1,4 +1,76 @@
 ---
+# Name of the inventory group that contains the *future* VMs you want to clone.
+# The role loops over hosts in this group and treats each as "one VM to create".
+proxmox_vm_group: "proxmox_vms_to_clone"
+
+# ===== Proxmox API / connection details ===== #
+
+# Hostname/IP of the Proxmox API endpoint (usually one of your PVE nodes, e.g. "walnut").
+proxmox_api_host: "walnut.aaron.lan"
+
+# User for API access; typically an API user like "ansible@pve". If you are using LDAP (or something else), 
+# it might be @ldap, but @pve is standard for local accounts.
+proxmox_api_user: "ansible@pve"
+
+# API token ID for that user: full "user@realm!tokenname" as shown in Proxmox.
+# In your case: ansible@pve!ansible-maint001
+proxmox_api_token_id: "ansible@pve!ansible-maint001"
+
+# Vaulted
+api_token_secret: "{{ proxmox_api_token_secret }}"
+
+# TCP port for the Proxmox web/API interface (default is 8006).
+proxmox_api_port: 8006
+
+# Whether to validate the Proxmox HTTPS certificate.
+# false = ignore cert issues (self-signed) ; true = strict TLS validation.
 proxmox_validate_certs: false
+
+# ===== Template / node selection ===== #
+
+# Name of the Proxmox node where the source template lives and where clones will be created.
+proxmox_node: "walnut.aaron.lan"
+
+# Name (or VMID resolvable by name) of the source VM/template you are cloning from.
+proxmox_source_vm_name: "elastic-template"
+
+# If true, the role will start the source VM/template once before cloning (run_once).
+proxmox_ensure_source_started: true
+
+# ===== New VM defaults (what the clones look like) ===== #
+
+# Proxmox storage ID where cloned disks will be placed (e.g. "local-zfs", "nvme-zfs").
+proxmox_new_vm_storage: "mydata"
+
+# If true, create a full clone (independent disk). If false, make a linked clone.
+proxmox_new_vm_full_clone: true
+
+# Disk format for the clone (e.g. "raw", "qcow2"); qcow2 supports snapshots/thin-provisioning.
+proxmox_new_vm_disk_format: "qcow2"
+
+# Timeout (in seconds) for the clone operation before Ansible considers it failed.
+proxmox_new_vm_clone_timeout: 300
+
+# Default cloud-init username inside the guest (used when configuring the cloned VM).
+proxmox_new_vm_ciuser: "user"
+
+# Default DNS servers passed via cloud-init/network config to the VM.
+proxmox_new_vm_dns_servers:
+  - "1.1.1.1"
+  - "8.8.8.8"
+
+# Default search domain given to the VM (e.g. becomes part of its resolv.conf).
+proxmox_new_vm_searchdomain: "aaron.lan"
+
+# Default description shown in Proxmox for each newly cloned VM.
+proxmox_new_vm_description: "Cloned via Ansible"
+
+# ===== Shutdown-related vars (from your shutdown role) ===== #
+
+# Maximum time (seconds) to wait for each VM to shut down gracefully
+# before considering it a failure / timeout.
 proxmox_shutdown_timeout: 300
+
+# List of VMIDs (or VM identifiers) to apply shutdown logic to in the shutdown role.
+# Often something like [200, 201, 202]. Empty list means "no VMs specified".
 proxmox_vms: []

@@ -46,7 +46,6 @@ hostCA: "ca.crt"
 # ===== Packages ===== #
 # Debian
 elastic_required_packages:
-  - apt-transport-https
+  #- apt-transport-https [this might not be needed anymore]
   - gpg
-  - apt-transport-https
   - nfs-kernel-server

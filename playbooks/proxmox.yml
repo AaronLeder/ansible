@@ -1,26 +1,23 @@
 ---
-- name: Gracefully shut down Proxmox VMs
+- name: Proxmox Playbook
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
-    # Required Proxmox API connection settings
-    proxmox_api_host: "pve1.your.lab"          # or IP, e.g. 192.168.1.129
-    proxmox_api_user: "root@pam"
-    proxmox_api_token_id: "ansible"
-    proxmox_api_token_secret: "{{ lookup('env', 'PROXMOX_API_TOKEN_SECRET') }}"
-
-    # Optional overrides (role has defaults in roles/proxmox_shutdown/defaults/main.yml)
+    # Optional overrides (role has defaults in roles/proxmox/defaults/main.yml)
     # Defaults:
     #   proxmox_validate_certs: false
     #   proxmox_shutdown_timeout: 300
     #   proxmox_vms: []
-    proxmox_validate_certs: true        # optional – override default false
-    proxmox_shutdown_timeout: 600       # optional – override default 300
-    proxmox_vms:                        # optional – override default []
-      - 200
-      - 201
+    #proxmox_vms:  # optional – override default []
+    #  - 200
+    #  - 201
+
+  vars_files:
+    - ../vault/elasticsearch-dev.yml
 
   roles:
     - proxmox
+  tags: 
+    - proxmox_connectivity

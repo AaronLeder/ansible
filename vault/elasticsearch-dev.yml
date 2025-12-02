@@ -2,7 +2,14 @@
 ansible_password: 'Test123$'
 ansible_become_password: "{{ ansible_password }}"
 
-# ===== Service Accounts ===== #
+# ===== Proxmox ===== #
+# Created in Proxmox. Instructions in the proxmox.md.
+proxmox_api_token_secret: "82bed9a4-5c70-4e3f-91f2-a2caf2057648"
+
+# Default cloud-init password for that user.
+proxmox_new_vm_cipassword: "Test123!"
+
+# ===== Elasticsearch Service Accounts ===== #
 elastic_password: "changeme1234"
 kibana_password: "changeme1234"
 logstash_password: "changeme1234"

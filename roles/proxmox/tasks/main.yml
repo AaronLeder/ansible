@@ -1,5 +1,26 @@
 ---
-- name: Gracefully stop Proxmox VMs
-  ansible.builtin.include_tasks: shutdown_proxmox_vms.yml
+- name: Install Proxmox Collection
+  ansible.builtin.command: ansible-galaxy collection install community.proxmox
   tags:
-    - shutdown_proxmox_vms
+    - always
+
+- name: Ping Proxmox Hosts to ensure a connection can be made
+  ansible.builtin.include_tasks: connectivity.yml
+  tags:
+    - proxmox_connectivity
+    - always
+
+- name: Start VMs
+  ansible.builtin.include_tasks: start_vms.yml
+  tags:
+    - proxmox_start_vms
+
+- name: Clone VMs
+  ansible.builtin.include_tasks: clone_vms.yml
+  tags:
+    - proxmox_clone_vms
+
+- name: Gracefully stop Proxmox VMs
+  ansible.builtin.include_tasks: shutdown_vms.yml
+  tags:
+    - proxmox_shutdown_vms

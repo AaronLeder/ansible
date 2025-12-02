@@ -1,6 +1,58 @@
 all:
   children:
     
+    # ===== Proxmox ===== #
+    proxmox:
+      hosts:
+        walnut.aaron.lan:
+          ansible_host: 192.168.1.200
+        rainbow.aaron.lan:
+          ansible_host: 192.168.1.201
+        cheddar.aaron.lan:
+          ansible_host: 192.168.1.202
+        squeak.aaron.lan: 
+          ansible_host: 192.168.1.203
+
+    # ===== Infra ===== #
+    infra:
+      hosts:
+        maint001.infra.pve:
+          ansible_host: 192.168.29.2
+
+    # ===== Elasticsearch ===== #
+    elastic:
+      hosts:
+        elastic001.aaron.lan:
+          ansible_host: 192.168.30.11
+          proxmox_vmid: 301
+          proxmox_prefix: 24
+          proxmox_gateway: 192.168.30.1
+        elastic002.aaron.lan:
+          ansible_host: 192.168.30.12
+          proxmox_vmid: 302
+          proxmox_prefix: 24
+          proxmox_gateway: 192.168.30.1
+        elastic003.aaron.lan:
+          ansible_host: 192.168.30.13
+          proxmox_vmid: 303
+          proxmox_prefix: 24
+          proxmox_gateway: 192.168.30.1
+
+    logstash:
+      hosts:
+        logstash001.aaron.lan:
+          ansible_host: 192.168.30.60
+
+    kibana:
+      hosts:
+        kibana001.aaron.lan:
+          ansible_host: 192.168.30.50
+
+    fleet:
+      hosts:
+        kibana001.aaron.lan:
+          ansible_host: 192.168.30.50
+
     elasticsearch:
       children:
         elastic:
@@ -8,34 +60,16 @@ all:
         logstash:
         fleet:
 
-    elastic:
-      hosts:
-        ubuntu001.elastic.pve:
-          ansible_host: 192.168.30.11
-        ubuntu002.elastic.pve:
-          ansible_host: 192.168.30.12
-
-    kibana:
-      hosts:
-        ubuntu003.elastic.pve:
-          ansible_host: 192.168.30.13
-
-    logstash:
-      hosts:
-        ubuntu004.elastic.pve:
-          ansible_host: 192.168.30.14
-
-    fleet:
-      hosts:
-        ubuntu005.elastic.pve:
-          ansible_host: 192.168.30.15
-
-    infra:
-      hosts:
-        maint001.infra.pve:
-          ansible_host: 192.168.29.2
-
-    proxmox:
-      hosts:
-        BluePHat:
-          ansible_host: 192.168.1.126
+  # ===== DEV ===== #
+  testing:
+    hosts: 
+      ubuntu001.dev.pve:
+        ansible_host: 192.168.35.11
+      ubuntu002.dev.pve:
+        ansible_host: 192.168.35.12
+      ubuntu003.dev.pve:
+        ansible_host: 192.168.35.13
+      ubuntu004.dev.pve:
+        ansible_host: 192.168.35.14
+      ubuntu005.dev.pve:
+        ansible_host: 192.168.35.15
