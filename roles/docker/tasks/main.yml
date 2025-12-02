@@ -1,6 +1,0 @@
----
-- name: Install docker
-  when: ansible_facts['os_family'] == "Debian"
-  ansible.builtin.include_tasks: install.yml
-  tags:
-    - install_docker

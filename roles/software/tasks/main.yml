@@ -1,0 +1,49 @@
+---
+- name: Update Cache & Install Baseline Tools
+  ansible.builtin.apt:
+    name:
+      - vim
+      - tree
+      - curl
+      - tcpdump
+      - ethtool
+    state: present
+    update_cache: true
+  tags:
+    - install_base
+
+- name: Install docker
+  when: ansible_facts['os_family'] == "Debian"
+  ansible.builtin.apt: 
+    name: gpg
+    state: present
+  tags:
+    - install_gpg
+    - elastic
+    - never
+  
+- name: Install docker
+  when: ansible_facts['os_family'] == "Debian"
+  ansible.builtin.apt: 
+    name: nfs-kernel-server
+    state: present
+  tags:
+    - install_nks
+    - elastic
+    - never
+
+# ===== Docker ===== #
+- name: Install docker
+  when: ansible_facts['os_family'] == "Debian"
+  ansible.builtin.include_tasks: docker_deb.yml
+  tags:
+    - install_docker
+    - never
+
+# ===== Kubernetes ===== #
+- name: Install kubectl
+  when: ansible_facts['os_family'] == "Debian"
+  ansible.builtin.include_tasks: kubectl_deb.yml
+  tags:
+    - install_kubectl
+    - never
