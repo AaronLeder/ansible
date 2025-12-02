@@ -21,7 +21,7 @@
       proxmox_api_token_id defined: {{ proxmox_api_token_id is defined }} ||
       proxmox_api_token_secret defined: {{ proxmox_api_token_secret is defined }}.
 
-# ===== Network-level connectivity check (ICMP ping) ===== #
+# ===== Network-level check (ICMP ping) ===== #
 
 - name: "Ping Proxmox API host from control node"
   ansible.builtin.command: "ping -c3 -W5 {{ proxmox_api_host }}"
@@ -29,7 +29,7 @@
   changed_when: false
   failed_when: proxmox_icmp_ping.rc != 0
 
-# ===== API-level connectivity + auth check ===== #
+# ===== API-level + auth check ===== #
 
 - name: "Ping Proxmox API /version endpoint with token"
   ansible.builtin.uri:
