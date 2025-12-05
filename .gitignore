@@ -3,6 +3,8 @@ archive/*
 certificates/
 playbooks/certificates/
 
+vault_pass.txt
+
 # ===== Packages ===== #
 packages/*.deb
 packages/*.rpm
