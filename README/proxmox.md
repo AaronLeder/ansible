@@ -80,14 +80,14 @@ Value (the secret):
 ### Copy the Value immediately. **You will not see it again.**
 
 ## Tags
-- proxmox_onnectivity
-- proxmox_start_vms
-- proxmox_clone_vms
-- proxmox_shutdown_vms
+- pve_connectivity
+- pve_start_vms
+- pve_clone_vms
+- pve_shutdown_vms
 
 ## Notes:
 For Proxmox connections; 
   * hosts: localhost
   * connection: local
 
-With community.general.proxmox_kvm you’re **not** SSH’ing into the Proxmox node; you’re making API calls (HTTPS) from your Ansible controller to Proxmox.
+With community.general.pve_kvm you’re **not** SSH’ing into the Proxmox node; you’re making API calls (HTTPS) from your Ansible controller to Proxmox.
