@@ -1,56 +1,56 @@
 ---
 # This role assumes these already exist somewhere (ex; group_vars, defaults, vault):
-#   proxmox_api_host
-#   proxmox_api_port        (optional, defaults to 8006)
-#   proxmox_api_user
-#   proxmox_api_token_id
-#   proxmox_api_token_secret
-#   proxmox_validate_certs  (optional, defaults to false)
+#   pve_api_host
+#   pve_api_port        (optional, defaults to 8006)
+#   pve_api_user
+#   pve_api_token_id
+#   pve_api_token_secret
+#   pve_validate_certs  (optional, defaults to false)
 
 - name: "Assert required Proxmox API variables are defined"
   ansible.builtin.assert:
     that:
-      - proxmox_api_host is defined
-      - proxmox_api_user is defined
-      - proxmox_api_token_id is defined
-      - proxmox_api_token_secret is defined
+      - pve_api_host is defined
+      - pve_api_user is defined
+      - pve_api_token_id is defined
+      - pve_api_token_secret is defined
     fail_msg: >
       One or more required Proxmox variables are missing!
-      proxmox_api_host defined: {{ proxmox_api_host is defined }} ||
-      proxmox_api_user defined: {{ proxmox_api_user is defined }} ||
-      proxmox_api_token_id defined: {{ proxmox_api_token_id is defined }} ||
-      proxmox_api_token_secret defined: {{ proxmox_api_token_secret is defined }}.
+      pve_api_host defined: {{ pve_api_host is defined }} ||
+      pve_api_user defined: {{ pve_api_user is defined }} ||
+      pve_api_token_id defined: {{ pve_api_token_id is defined }} ||
+      pve_api_token_secret defined: {{ pve_api_token_secret is defined }}.
 
-# ===== Network-level check (ICMP ping) ===== #
+# Network-level check (ICMP ping)
 
 - name: "Ping Proxmox API host from control node"
-  ansible.builtin.command: "ping -c3 -W5 {{ proxmox_api_host }}"
-  register: proxmox_icmp_ping
+  ansible.builtin.command: "ping -c3 -W5 {{ pve_api_host }}"
+  register: pve_icmp_ping
   changed_when: false
-  failed_when: proxmox_icmp_ping.rc != 0
+  failed_when: pve_icmp_ping.rc != 0
 
-# ===== API-level + auth check ===== #
+# API-level + auth check
 
 - name: "Ping Proxmox API /version endpoint with token"
   ansible.builtin.uri:
-    url: "https://{{ proxmox_api_host }}:{{ proxmox_api_port | default(8006) }}/api2/json/version"
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/version"
     method: GET
-    validate_certs: "{{ proxmox_validate_certs | default(false) }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
     return_content: true
     status_code:
       - 200
     headers:
       # Proxmox token auth: PVEAPIToken=<user@realm!tokenid>=<secret>
-      Authorization: "PVEAPIToken={{ proxmox_api_token_id }}={{ proxmox_api_token_secret }}"
-  register: proxmox_api_ping
+      Authorization: "PVEAPIToken={{ pve_api_token_id }}={{ pve_api_token_secret }}"
+  register: pve_api_ping
   changed_when: false
 
 - name: "Verify Proxmox API response contains version data"
   ansible.builtin.assert:
     that:
-      - proxmox_api_ping.json is defined
-      - proxmox_api_ping.json.data is defined
-      - proxmox_api_ping.json.data.version is defined
+      - pve_api_ping.json is defined
+      - pve_api_ping.json.data is defined
+      - pve_api_ping.json.data.version is defined
     fail_msg: >
       Reached Proxmox API but did not get the expected version data.
       Check your token permissions and API URL.
@@ -58,6 +58,6 @@
 - name: "Show Proxmox version that Ansible connected to"
   ansible.builtin.debug:
     msg: >
-      Proxmox connectivity OK: host={{ proxmox_api_host }},
-      version={{ proxmox_api_ping.json.data.version }},
-      release={{ proxmox_api_ping.json.data.release }}
+      Proxmox connectivity OK: host={{ pve_api_host }},
+      version={{ pve_api_ping.json.data.version }},
+      release={{ pve_api_ping.json.data.release }}
