@@ -1,5 +1,5 @@
 ---
-# This role assumes these already exist somewhere (ex; group_vars, defaults, vault):
+# These tasks assumes these already exist somewhere (ex; group_vars, defaults, vault):
 #   pve_api_host
 #   pve_api_port        (optional, defaults to 8006)
 #   pve_api_user
@@ -7,7 +7,7 @@
 #   pve_api_token_secret
 #   pve_validate_certs  (optional, defaults to false)
 
-- name: "Assert required Proxmox API variables are defined"
+- name: Assert required Proxmox API variables are defined
   ansible.builtin.assert:
     that:
       - pve_api_host is defined
@@ -23,7 +23,7 @@
 
 # Network-level check (ICMP ping)
 
-- name: "Ping Proxmox API host from control node"
+- name: Ping Proxmox API host from control node
   ansible.builtin.command: "ping -c3 -W5 {{ pve_api_host }}"
   register: pve_icmp_ping
   changed_when: false
@@ -31,7 +31,7 @@
 
 # API-level + auth check
 
-- name: "Ping Proxmox API /version endpoint with token"
+- name: Ping Proxmox API /version endpoint with token
   ansible.builtin.uri:
     url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/version"
     method: GET
@@ -45,7 +45,7 @@
   register: pve_api_ping
   changed_when: false
 
-- name: "Verify Proxmox API response contains version data"
+- name: Verify Proxmox API response contains version data
   ansible.builtin.assert:
     that:
       - pve_api_ping.json is defined
@@ -55,7 +55,7 @@
       Reached Proxmox API but did not get the expected version data.
       Check your token permissions and API URL.
 
-- name: "Show Proxmox version that Ansible connected to"
+- name: Show returned Proxmox version
   ansible.builtin.debug:
     msg: >
       Proxmox connectivity OK: host={{ pve_api_host }},
