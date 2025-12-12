@@ -1,0 +1,17 @@
+---
+- name: Start specified VMs by VM ID
+  delegate_to: localhost
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_token_name }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    node: "{{ inventory_hostname_short }}"
+    vmid: "{{ item }}"
+    state: started
+  loop: "{{ pve_start_vmids }}"
+  when: 
+    - pve_start_vmids is defined
+    - pve_start_vmids | length > 0

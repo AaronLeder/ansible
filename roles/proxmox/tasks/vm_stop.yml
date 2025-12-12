@@ -1,0 +1,14 @@
+---
+- name: Gracefully stop Proxmox VMs via API
+  community.general.pve_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ api_token_secret }}"
+    api_port: "{{ pve_api_port }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    vmid: "{{ item }}"
+    state: stopped        # graceful shutdown
+    force: false          # don't hard-stop unless timeout kicks in
+    timeout: "{{ pve_shutdown_timeout }}"
+  loop: "{{ pve_shutdown_vm_name }}"
