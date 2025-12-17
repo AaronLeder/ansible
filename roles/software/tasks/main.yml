@@ -1,4 +1,12 @@
 ---
+- name: Update Cache & Patch Host
+  ansible.builtin.apt:
+    name: "*"
+    state: latest
+    update_cache: true
+  tags: 
+    - always
+
 - name: Update Cache & Install Baseline Tools
   ansible.builtin.apt:
     name:
@@ -12,24 +20,27 @@
     update_cache: true
   tags:
     - install_base
-
-- name: Install docker
-  when: ansible_facts['os_family'] == "Debian"
-  ansible.builtin.apt: 
-    name: gpg
-    state: present
-  tags:
-    - install_gpg
-    - elastic
     - never
-  
-- name: Install docker
-  when: ansible_facts['os_family'] == "Debian"
-  ansible.builtin.apt: 
-    name: nfs-kernel-server
-    state: present
+
+- name: Install Elastic dependencies
+  when: 
+   - ansible_facts['os_family'] == "Debian"
+   - inventory_hostname in groups["elasticsearch"]
+  block: 
+    - name: Install gpg
+      ansible.builtin.apt: 
+        name: gpg
+        state: present
+      tags:
+        - install_gpg
+      
+    - name: Install nfs-kernel-server
+      ansible.builtin.apt: 
+        name: nfs-kernel-server
+        state: present
+      tags:
+        - install_nks
   tags:
-    - install_nks
     - elastic
     - never
 

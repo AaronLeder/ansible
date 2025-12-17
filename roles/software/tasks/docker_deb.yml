@@ -5,7 +5,6 @@
       - ca-certificates
       - curl
     state: present
-    #update_cache: true
 
 - name: Create directory for Docker GPG key
   ansible.builtin.file:
@@ -27,8 +26,6 @@
     state: present
   register: docker_repo
   notify: apt_update_cache
-  tags: 
-    - os_ubuntu
 
 # Ensure the handler runs before we try to install packages
 - name: Flush handlers if repository was added/changed
