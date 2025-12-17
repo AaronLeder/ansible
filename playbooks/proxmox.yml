@@ -1,23 +1,65 @@
 ---
-- name: Proxmox Playbook
+# ===== Global ===== #
+- name: Proxmox Host Connectivity
   hosts: localhost
   connection: local
   gather_facts: false
 
-  vars:
-    # Optional overrides (role has defaults in roles/proxmox/defaults/main.yml)
-    # Defaults:
-    #   proxmox_validate_certs: false
-    #   proxmox_shutdown_timeout: 300
-    #   proxmox_vms: []
-    #proxmox_vms:  # optional – override default []
-    #  - 200
-    #  - 201
+  tasks:
+    # Optional overrides (role has defaults in `roles/proxmox/defaults/main.yml`)
+    - name: Set global vars
+      ansible.builtin.set_fact:
+        # Set up a new Ansible controller
+        setup_ansible: false
+        # Whether or not to test for connectivity
+        #connectivity_check: false
+        # PVE Variables
+        pve_api_host: "walnut"
+        pve_api_user: "ansible@pve"
+        pve_token_name: "ansible-maint001"
+        pve_api_token_id: "ansible@pve!ansible-maint001"
+        pve_validate_certs: false
+        pve_timeout: 300
+
+# ===== Connectivity ===== #
+- name: Proxmox Host Connectivity
+  hosts: localhost
+  connection: local
+  gather_facts: false  
 
   vars_files:
-    - ../vault/elasticsearch-dev.yml
-
+    - ../vault/aaron-homelab.yml
   roles:
     - proxmox
   tags: 
-    - proxmox_connectivity
+    - pve_connectivity
+
+# ===== VM State ===== #
+- name: Proxmox Start VMs & LXCs
+  hosts: proxmox
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Define the state. You can leave this empty to skip.
+    pve_vm_state:
+    # Define which VMs to start on which Proxmox host
+    # Acceptable formats: [151, 152] or [151,152] or list
+    pve_vm_map:
+      walnut: [151,152]
+      rainbow: []
+      cheddar: []
+      squeak: []
+
+    # Dynamically set the VMIDs for current host
+    pve_api_host: "{{ inventory_hostname_short }}"
+    pve_vmids: "{{ pve_vm_map[inventory_hostname_short] | default([]) }}"
+
+  vars_files:
+    - ../vault/aaron-homelab.yml
+  roles:
+    - proxmox
+  tags:
+    - pve_state_vms
+
+# ===== VM Clone ===== #

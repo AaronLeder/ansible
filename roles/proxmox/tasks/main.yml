@@ -1,28 +1,38 @@
 ---
-- name: Install Proxmox Collection, changed should always be true 
-  ansible.builtin.command: ansible-galaxy collection install community.proxmox
-  register: ansible_proxmox
-  failed_when: ansible_proxmox.rc != 0
+- name: Ensure Ansible controller is configured for community.proxmox
+  when: setup_ansible is true
+  block: 
+    - name: Install Proxmox Collection
+      ansible.builtin.command: ansible-galaxy collection install community.proxmox
+      register: ansible_proxmox
+      failed_when: ansible_proxmox.rc != 0
+    
+    - name: Install dependencies
+      become: true
+      ansible.builtin.apt:
+        name: 
+          - python3-proxmoxer
+          - python3-requests
+        state: present
+        update_cache: true
   tags:
-    - always
+    - cfg_ansible_for_pve
+    - never
 
 - name: Ping Proxmox Hosts to ensure a connection can be made
+  #when: connectivity_check is true
   ansible.builtin.include_tasks: connectivity.yml
   tags:
-    - proxmox_connectivity
-    - always
+    - pve_connectivity
+    - never
 
-- name: Start VMs
-  ansible.builtin.include_tasks: start_vms.yml
+- name: Change state of designated VMs
+  when: pve_vm_state is defined and pve_vm_state is not none
+  ansible.builtin.include_tasks: vm_state.yml
   tags:
-    - proxmox_start_vms
+    - pve_state_vms
 
-- name: Clone VMs
-  ansible.builtin.include_tasks: clone_vms.yml
+- name: Clone designated VMs
+  ansible.builtin.include_tasks: vm_clone.yml
   tags:
-    - proxmox_clone_vms
-
-- name: Gracefully stop Proxmox VMs
-  ansible.builtin.include_tasks: shutdown_vms.yml
-  tags:
-    - proxmox_shutdown_vms
+    - pve_clone_vms
