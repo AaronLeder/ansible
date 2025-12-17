@@ -3,6 +3,18 @@
 ## Dependencies
 - `community.proxmox` ansible collection
 
+## Usage
+```bash
+# Start VMs on all Proxmox hosts
+ansible-playbook playbooks/proxmox.yml --tags pve_state_vms
+
+# Change state of VMs only on walnut
+ansible-playbook playbooks/proxmox.yml --tags pve_state_vms --limit walnut.aaron.lan
+
+# Test connectivity first, then change state of VMs
+ansible-playbook playbooks/proxmox.yml --tags pve_connectivity,pve_state_vms
+```
+
 ## How to Create a Token ID
 ### 1. Decide on your API user
 
@@ -81,9 +93,8 @@ Value (the secret):
 
 ## Tags
 - pve_connectivity
-- pve_start_vms
+- pve_state_vms
 - pve_clone_vms
-- pve_shutdown_vms
 
 ## Notes:
 For Proxmox connections; 
@@ -91,3 +102,7 @@ For Proxmox connections;
   * connection: local
 
 With community.general.pve_kvm you’re **not** SSH’ing into the Proxmox node; you’re making API calls (HTTPS) from your Ansible controller to Proxmox.
+
+### Fix Permissions Issues
+pveum role add AnsibleVMStart -privs "VM.Audit VM.PowerMgmt"
+pveum aclmod /vms -user ansible@pve -role AnsibleVMStart
