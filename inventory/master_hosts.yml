@@ -1,6 +1,20 @@
 all:
   children:
     
+    # ===== School ===== #
+    school:
+      hosts:
+        digfor-pve:
+          ansible_host: 192.168.1.90
+          pve_vmid: 151
+          pve_prefix: 24
+          pve_gateway: 192.168.1.1
+        appsec-pve:
+          ansible_host: 192.168.1.118
+          pve_vmid: 152
+          pve_prefix: 24
+          pve_gateway: 192.168.1.1
+
     # ===== Proxmox ===== #
     proxmox:
       hosts:
@@ -13,30 +27,43 @@ all:
         squeak.aaron.lan: 
           ansible_host: 192.168.1.203
 
+    # Only need to put the host here
+    pve_vms_to_clone:
+      hosts:
+        maint002.aaron.lan:
+
     # ===== Infra ===== #
     infra:
       hosts:
-        maint001.infra.pve:
+        maint001.aaron.lan:
           ansible_host: 192.168.29.2
-
+          pve_vmid: 100
+          pve_prefix: 29
+          pve_gateway: 192.168.29.1
+        maint002.aaron.lan:
+          ansible_host: 192.168.29.3
+          pve_vmid: 101
+          pve_prefix: 29
+          pve_gateway: 192.168.29.1
+          
     # ===== Elasticsearch ===== #
     elastic:
       hosts:
         elastic001.aaron.lan:
           ansible_host: 192.168.30.11
-          proxmox_vmid: 301
-          proxmox_prefix: 24
-          proxmox_gateway: 192.168.30.1
+          pve_vmid: 301
+          pve_prefix: 24
+          pve_gateway: 192.168.30.1
         elastic002.aaron.lan:
           ansible_host: 192.168.30.12
-          proxmox_vmid: 302
-          proxmox_prefix: 24
-          proxmox_gateway: 192.168.30.1
+          pve_vmid: 302
+          pve_prefix: 24
+          pve_gateway: 192.168.30.1
         elastic003.aaron.lan:
           ansible_host: 192.168.30.13
-          proxmox_vmid: 303
-          proxmox_prefix: 24
-          proxmox_gateway: 192.168.30.1
+          pve_vmid: 303
+          pve_prefix: 24
+          pve_gateway: 192.168.30.1
 
     logstash:
       hosts:
@@ -60,16 +87,16 @@ all:
         logstash:
         fleet:
 
-  # ===== DEV ===== #
-  testing:
-    hosts: 
-      ubuntu001.dev.pve:
-        ansible_host: 192.168.35.11
-      ubuntu002.dev.pve:
-        ansible_host: 192.168.35.12
-      ubuntu003.dev.pve:
-        ansible_host: 192.168.35.13
-      ubuntu004.dev.pve:
-        ansible_host: 192.168.35.14
-      ubuntu005.dev.pve:
-        ansible_host: 192.168.35.15
+    # ===== DEV ===== #
+    dev:
+      hosts: 
+        ubuntu001.dev.pve:
+          ansible_host: 192.168.35.11
+        ubuntu002.dev.pve:
+          ansible_host: 192.168.35.12
+        ubuntu003.dev.pve:
+          ansible_host: 192.168.35.13
+        ubuntu004.dev.pve:
+          ansible_host: 192.168.35.14
+        ubuntu005.dev.pve:
+          ansible_host: 192.168.35.15
