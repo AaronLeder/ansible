@@ -21,54 +21,12 @@ pve_api_port: 8006
 # false = ignore cert issues (self-signed) ; true = strict TLS validation.
 pve_validate_certs: false
 
-# ===== Starting ===== #
-pve_start_vmids: []
-
 # ===== Template / Node selection ===== #
-#
-## Name of the Proxmox node where the source template lives and where clones will be created.
-#pve_template_node: "walnut"
-#
-## Name of the inventory group that contains the *future* VMs you want to clone.
-## The role loops over hosts in this group and treats each as "one VM to create".
-#pve_vm_group: "pve_vms_to_clone"
-#
-## Name (or VMID resolvable by name) of the source VM/template you are cloning from.
-#pve_source_vm_name: "ubuntu-template"
-#
-## If true, the role will start the source VM/template once before cloning (run_once).
-#pve_ensure_source_started: true
-#
-## ===== New VM defaults ===== #
-#
-## Proxmox storage ID where cloned disks will be placed (e.g. "local-zfs", "nvme-zfs").
-#pve_new_vm_storage: "mydata"
-#
-## If true, create a full clone (independent disk). If false, make a linked clone.
-#pve_new_vm_full_clone: true
-#
-## Disk format for the clone (e.g. "raw", "qcow2"); qcow2 supports snapshots/thin-provisioning.
-#pve_new_vm_disk_format: "qcow2"
-#
-## Timeout (in seconds) for the clone operation before Ansible considers it failed.
-#pve_new_vm_clone_timeout: 300
-#
-## Default cloud-init username inside the guest (used when configuring the cloned VM).
-#pve_new_vm_ciuser: "user"
-#
-## Default DNS servers passed via cloud-init/network config to the VM.
-#pve_new_vm_dns_servers:
-#  - "1.1.1.1"
-#  - "8.8.8.8"
-#
-## Default search domain given to the VM (e.g. becomes part of its resolv.conf).
-#pve_new_vm_searchdomain: "aaron.lan"
-#
-## Default description shown in Proxmox for each newly cloned VM.
-#pve_new_vm_description: "Cloned via Ansible"
-#
-## ===== Shutdown-related vars ===== #
-#
-## Maximum time (seconds) to wait for each VM to shut down gracefully
-## before considering it a failure / timeout.
-#pve_shutdown_timeout: 300
+pve_clone_template_id: 9000        # Proxmox template VMID to clone
+pve_clone_target_node: pve         # Node where the template resides (and default target node)
+pve_clone_storage: local-lvm       # Target storage for full clones
+pve_clone_format: qcow2            # Disk format (may be ignored/invalid on some storage types)
+pve_clone_pool: ""                 # Optional pool name (empty = omit)
+pve_clone_vmid_start: 100          # Starting VMID when a host does not define pve_vmid
+pve_clone_full: true               # full clone vs linked clone
+pve_clone_timeout: 900             # seconds

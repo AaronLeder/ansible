@@ -63,3 +63,25 @@
     - pve_state_vms
 
 # ===== VM Clone ===== #
+- name: Clone Proxmox VMs for hosts in pve_vms_to_clone
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # These can also be set here to override role defaults (optional)
+    pve_clone_template_id: 100
+    pve_clone_target_node: walnut
+    pve_clone_storage: mydata
+    pve_clone_format: qcow2
+    pve_clone_pool: ""
+    # pve_clone_vmid_start: 100
+
+    pve_clone_targets: "{{ groups.get('pve_vms_to_clone', []) }}"
+
+  vars_files:
+    - ../vault/aaron-homelab.yml
+  roles:
+    - proxmox
+  tags:
+    - pve_clone_vms

@@ -1,6 +1,16 @@
+# Proxmox minimum per-host variables (these are what drive hostname/IP):
+#ansible_host: 192.168.30.50
+#pve_prefix: 24
+#pve_gateway: 192.168.30.1
+# Optional:
+#pve_vmid: 150
+#clone_storage: local-zfs
+#clone_target_node: pve
+#clone_format: raw
+#clone_pool: somepool
+
 all:
   children:
-    
     # ===== School ===== #
     school:
       hosts:

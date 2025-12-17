@@ -1,0 +1,49 @@
+---
+- name: Assert pve_vms_to_clone is not empty
+  ansible.builtin.assert:
+    that:
+      - pve_clone_targets | length > 0
+    fail_msg: "Inventory group 'pve_vms_to_clone' is empty."
+
+- name: Assert required global clone variables exist
+  ansible.builtin.assert:
+    that:
+      - (pve_clone_template_id | int) > 0
+      - (pve_clone_target_node | default('') | length) > 0
+      - (pve_clone_vmid_start | int) > 0
+    fail_msg: "Missing/invalid pve_clone_* vars. Ensure pve_clone_template_id, pve_clone_target_node, pve_clone_vmid_start are set."
+
+- name: Assert required per-target inventory vars exist
+  ansible.builtin.assert:
+    that:
+      - hostvars[item].ansible_host is defined
+      - (hostvars[item].pve_prefix | default('') | int) > 0
+      - hostvars[item].pve_gateway is defined
+    fail_msg: "{{ item }} must define ansible_host, pve_prefix, pve_gateway"
+  loop: "{{ pve_clone_targets }}"
+
+- name: Build clone plan (host -> vmid), using pve_vmid if defined else pve_clone_vmid_start + index
+  ansible.builtin.set_fact:
+    pve_clone_plan: []
+
+- name: Append each clone target to pve_clone_plan
+  ansible.builtin.set_fact:
+    pve_clone_plan: >-
+      {{
+        pve_clone_plan + [
+          {
+            'host': item,
+            'vmid': (hostvars[item].pve_vmid | default(pve_clone_vmid_start + idx)) | int
+          }
+        ]
+      }}
+  loop: "{{ pve_clone_targets }}"
+  loop_control:
+    index_var: idx
+
+- name: Assert computed VMIDs are unique
+  ansible.builtin.assert:
+    that:
+      - (pve_clone_plan | map(attribute='vmid') | list) | length
+        == ((pve_clone_plan | map(attribute='vmid') | list) | unique | length)
+    fail_msg: "Duplicate VMIDs detected in clone plan: {{ pve_clone_plan | map(attribute='vmid') | list }}"

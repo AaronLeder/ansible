@@ -3,7 +3,7 @@
 #   pve_api_host
 #   pve_api_port        (optional, defaults to 8006)
 #   pve_api_user
-#   pve_api_token_id
+#   pve_token_name
 #   pve_api_token_secret
 #   pve_validate_certs  (optional, defaults to false)
 
@@ -12,13 +12,13 @@
     that:
       - pve_api_host is defined
       - pve_api_user is defined
-      - pve_api_token_id is defined
+      - pve_token_name is defined
       - pve_api_token_secret is defined
     fail_msg: >
       One or more required Proxmox variables are missing!
       pve_api_host defined: {{ pve_api_host is defined }} ||
       pve_api_user defined: {{ pve_api_user is defined }} ||
-      pve_api_token_id defined: {{ pve_api_token_id is defined }} ||
+      pve_token_name defined: {{ pve_token_name is defined }} ||
       pve_api_token_secret defined: {{ pve_api_token_secret is defined }}.
 
 # Network-level check (ICMP ping)
@@ -41,7 +41,7 @@
       - 200
     headers:
       # Proxmox token auth: PVEAPIToken=<user@realm!tokenid>=<secret>
-      Authorization: "PVEAPIToken={{ pve_api_token_id }}={{ pve_api_token_secret }}"
+      Authorization: "PVEAPIToken={{ pve_token_name }}={{ pve_api_token_secret }}"
   register: pve_api_ping
   changed_when: false
 

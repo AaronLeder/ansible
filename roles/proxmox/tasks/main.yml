@@ -21,7 +21,7 @@
 
 - name: Ping Proxmox Hosts to ensure a connection can be made
   #when: connectivity_check is true
-  ansible.builtin.include_tasks: connectivity.yml
+  ansible.builtin.include_tasks: pve_connectivity.yml
   tags:
     - pve_connectivity
     - never
@@ -32,7 +32,12 @@
   tags:
     - pve_state_vms
 
-- name: Clone designated VMs
-  ansible.builtin.include_tasks: vm_clone.yml
+- name: Clone VMs
+  block: 
+    - name: Preflight checks and clone plan
+      ansible.builtin.import_tasks: vm_clone_preflight.yml
+    
+    - name: Clone designated VMs
+      ansible.builtin.include_tasks: vm_clone.yml
   tags:
     - pve_clone_vms
