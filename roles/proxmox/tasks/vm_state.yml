@@ -1,5 +1,5 @@
 ---
-- name: Start specified VMs by VM ID
+- name: Change state of specified VMs
   delegate_to: localhost
   community.proxmox.proxmox_kvm:
     api_host: "{{ pve_api_host }}"
@@ -8,10 +8,8 @@
     api_token_id: "{{ pve_token_name }}"
     api_token_secret: "{{ pve_api_token_secret }}"
     validate_certs: "{{ pve_validate_certs | default(false) }}"
-    node: "{{ inventory_hostname_short }}"
-    vmid: "{{ item }}"
-    state: started
-  loop: "{{ pve_start_vmids }}"
-  when: 
-    - pve_start_vmids is defined
-    - pve_start_vmids | length > 0
+    vmid: "{{ item | int }}"
+    state: "{{ pve_vm_state }}"
+    timeout: "{{ pve_timeout | default(300) }}"
+  loop: "{{ pve_vmids | default([]) }}"
+  when: (pve_vmids | default([])) | length > 0
