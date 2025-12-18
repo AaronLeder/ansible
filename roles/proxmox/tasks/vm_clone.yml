@@ -12,6 +12,13 @@
   loop: "{{ pve_clone_plan }}"
   register: vmid_info
 
+
+
+
+
+
+
+
 - name: Fail if any target VMID already exists
   ansible.builtin.assert:
     that:

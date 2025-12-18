@@ -2,8 +2,10 @@
 - name: Assert pve_vms_to_clone is not empty
   ansible.builtin.assert:
     that:
-      - pve_clone_targets | length > 0
-    fail_msg: "Inventory group 'pve_vms_to_clone' is empty."
+      - (pve_clone_targets | default(groups['pve_vms_to_clone'] | default([])) | length) > 0
+    fail_msg: >-
+      No clone targets found. Populate inventory group 'pve_vms_to_clone'
+      or set pve_clone_targets explicitly.
 
 - name: Assert required global clone variables exist
   ansible.builtin.assert:

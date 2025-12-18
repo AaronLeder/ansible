@@ -20,7 +20,6 @@
     - never
 
 - name: Ping Proxmox Hosts to ensure a connection can be made
-  #when: connectivity_check is true
   ansible.builtin.include_tasks: pve_connectivity.yml
   tags:
     - pve_connectivity

@@ -1,28 +1,30 @@
 ---
-# ===== Proxmox API / Connection details / Defaults ===== #
-
-# Hostname/IP of the Proxmox API endpoint (one of your PVE nodes, do NOT use FQDN).
-pve_api_host: "walnut"
-
+# ===== Proxmox Defaults ===== #
+pve_api_host: "walnut"   # or FQDN
 # User for API access; typically an API user like "ansible@pve". If you are using LDAP (or something else), 
 # it might be @ldap, but @pve is standard for local accounts.
 pve_api_user: "ansible@pve"
-
 # User-created token for API access
-pve_token_name: "ansible-maint001"
-
+pve_api_token_name: "ansible-maint001"
 # API token ID for a user: full "user@realm!tokenname" as shown in Proxmox.
-pve_api_token_id: "{{ pve_api_user }}!{{ pve_token_name }}"
-
-# TCP port for the Proxmox web/API interface (default is 8006).
-pve_api_port: 8006
-
+#pve_api_token_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
+pve_api_token_id: "{{ pve_api_token_name }}"
+# For curl/header usage only:
+pve_api_token_authid: "{{ pve_api_user }}!{{ pve_api_token_name }}"
 # Whether to validate the Proxmox HTTPS certificate.
 # false = ignore cert issues (self-signed) ; true = strict TLS validation.
 pve_validate_certs: false
+pve_timeout: 300
+# TCP port for the Proxmox web/API interface (default is 8006).
+pve_api_port: 8006
 
-# ===== Template / Node selection ===== #
-pve_clone_template_id: 9000        # Proxmox template VMID to clone
+# === Don't touch! === #
+# Dynamically set the VMIDs for current host
+pve_node: "{{ inventory_hostname_short }}"
+pve_vmids: "{{ pve_vm_map[inventory_hostname_short] | default([]) }}"
+
+# ===== VM Clone ===== #
+pve_clone_template_id: 100        # Proxmox template VMID to clone
 pve_clone_target_node: pve         # Node where the template resides (and default target node)
 pve_clone_storage: local-lvm       # Target storage for full clones
 pve_clone_format: qcow2            # Disk format (may be ignored/invalid on some storage types)
@@ -30,3 +32,6 @@ pve_clone_pool: ""                 # Optional pool name (empty = omit)
 pve_clone_vmid_start: 100          # Starting VMID when a host does not define pve_vmid
 pve_clone_full: true               # full clone vs linked clone
 pve_clone_timeout: 900             # seconds
+
+# Inventory group containing the VMs you want to clone
+pve_clone_targets: "{{ groups['pve_vms_to_clone'] | default([]) }}"

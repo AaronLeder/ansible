@@ -12,7 +12,7 @@
     that:
       - pve_api_host is defined
       - pve_api_user is defined
-      - pve_token_name is defined
+      - pve_api_token_name is defined
       - pve_api_token_secret is defined
     fail_msg: >
       One or more required Proxmox variables are missing!
@@ -22,7 +22,6 @@
       pve_api_token_secret defined: {{ pve_api_token_secret is defined }}.
 
 # Network-level check (ICMP ping)
-
 - name: Ping Proxmox API host from control node
   ansible.builtin.command: "ping -c3 -W5 {{ pve_api_host }}"
   register: pve_icmp_ping
@@ -30,8 +29,7 @@
   failed_when: pve_icmp_ping.rc != 0
 
 # API-level + auth check
-
-- name: Ping Proxmox API /version endpoint with token
+- name: cURL Proxmox API /version endpoint with token
   ansible.builtin.uri:
     url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/version"
     method: GET
@@ -41,9 +39,11 @@
       - 200
     headers:
       # Proxmox token auth: PVEAPIToken=<user@realm!tokenid>=<secret>
-      Authorization: "PVEAPIToken={{ pve_token_name }}={{ pve_api_token_secret }}"
+      Authorization: "PVEAPIToken={{ pve_api_token_id }}={{ pve_api_token_secret }}"
   register: pve_api_ping
   changed_when: false
+  # Prevent spillage
+  no_log: true
 
 - name: Verify Proxmox API response contains version data
   ansible.builtin.assert:
