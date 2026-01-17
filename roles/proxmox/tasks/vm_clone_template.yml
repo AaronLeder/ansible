@@ -1,0 +1,101 @@
+---
+- name: Check whether target VMIDs already exist in Proxmox
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ item.vmid }}"
+  loop: "{{ pve_clone_plan }}"
+  register: vmid_info
+
+- name: Fail if any target VMID already exists
+  ansible.builtin.assert:
+    that:
+      - (item.proxmox_vms | default([]) | length) == 0
+    fail_msg: >-
+      VMID {{ item.item.vmid }} for {{ item.item.host }} already exists in Proxmox.
+      Choose a different pve_vmid or adjust pve_clone_vmid_start.
+  loop: "{{ vmid_info.results }}"
+
+- name: Clone from template to each target VM
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+
+    # Source node (where the template lives)
+    node: "{{ pve_clone_source_node_resolved }}"
+    # Destination node (optional)
+    target: "{{ item.target_node if (item.target_node != pve_clone_source_node_resolved) else omit }}"
+
+    # Clone source: use resolved NAME; also pass vmid for clarity
+    clone: "{{ pve_clone_template_name_resolved }}"
+    vmid: "{{ pve_clone_template_id | int }}"
+
+    # New VM identity
+    newid: "{{ item.vmid }}"
+    name: "{{ item.host }}"
+
+    # Clone options
+    full: "{{ pve_clone_full | default(true) }}"
+    storage: "{{ item.storage if (pve_clone_full | default(true) | bool) else omit }}"
+    format: "{{ item.format | default(omit) }}"
+    pool: "{{ item.pool if ((item.pool | default('') | string | length) > 0) else omit }}"
+    timeout: "{{ pve_clone_timeout | default(900) }}"
+  loop: "{{ pve_clone_plan }}"
+
+- name: Wait until cloned VMs appear in Proxmox inventory
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ item.vmid }}"
+  register: wait_vm
+  until: (wait_vm.proxmox_vms | default([]) | length) == 1
+  retries: 30
+  delay: 5
+  loop: "{{ pve_clone_plan }}"
+  changed_when: false
+
+- name: Apply hostname + static IP via cloud-init (from inventory vars)
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    node: "{{ item.target_node }}"
+    vmid: "{{ item.vmid }}"
+    name: "{{ item.host }}"
+    ipconfig:
+      ipconfig0: "ip={{ hostvars[item.host].ansible_host }}/{{ hostvars[item.host].pve_prefix }},gw={{ hostvars[item.host].pve_gateway }}"
+    update: true
+  loop: "{{ pve_clone_plan }}"
+
+- name: Start cloned VMs
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    node: "{{ item.target_node }}"
+    vmid: "{{ item.vmid }}"
+    state: started
+    timeout: "{{ pve_timeout | default(300) }}"
+  loop: "{{ pve_clone_plan }}"

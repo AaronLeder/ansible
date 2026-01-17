@@ -1,0 +1,36 @@
+---
+- name: Clone from regular VM (non-template) to each target VM
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ pve_clone_source_node_resolved }}/qemu/{{ pve_clone_template_id | int }}/clone"
+    method: POST
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+    body_format: json
+    body:
+      newid: "{{ item.vmid }}"
+      name: "{{ item.host }}"
+      full: "{{ 1 if (pve_clone_full | default(true) | bool) else 0 }}"
+      storage: "{{ item.storage if (pve_clone_full | default(true) | bool) else omit }}"
+      format: "{{ item.format | default(omit) }}"
+      pool: "{{ item.pool if ((item.pool | default('') | string | length) > 0) else omit }}"
+      target: "{{ item.target_node if (item.target_node != pve_clone_source_node_resolved) else omit }}"
+    status_code: [200]
+  loop: "{{ pve_clone_plan }}"
+  register: clone_result
+  no_log: true
+
+- name: Wait for clone tasks to complete
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ pve_clone_source_node_resolved }}/tasks/{{ item.json.data }}/status"
+    method: GET
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+    status_code: [200]
+  loop: "{{ clone_result.results }}"
+  register: task_status
+  until: task_status.json.data.status == "stopped"
+  retries: 180
+  delay: 5
+  no_log: true

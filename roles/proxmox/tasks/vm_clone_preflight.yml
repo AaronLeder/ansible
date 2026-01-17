@@ -1,30 +1,106 @@
 ---
-- name: Assert pve_vms_to_clone is not empty
+- name: Skip clone workflow when disabled
+  ansible.builtin.debug:
+    msg: "pve_clone_enabled=false; skipping clone workflow."
+  when: not (pve_clone_enabled | default(true) | bool)
+
+- name: End play when clone workflow is disabled
+  ansible.builtin.meta: end_play
+  when: not (pve_clone_enabled | default(true) | bool)
+
+- name: Determine clone targets list
+  ansible.builtin.set_fact:
+    pve_clone_targets_resolved: "{{ pve_clone_targets | default(groups['pve_vms_to_clone'] | default([])) }}"
+
+- name: Assert clone targets list is not empty
   ansible.builtin.assert:
     that:
-      - (pve_clone_targets | default(groups['pve_vms_to_clone'] | default([])) | length) > 0
+      - (pve_clone_targets_resolved | length) > 0
     fail_msg: >-
       No clone targets found. Populate inventory group 'pve_vms_to_clone'
       or set pve_clone_targets explicitly.
 
-- name: Assert required global clone variables exist
+- name: Assert required global clone variables exist (safe checks)
   ansible.builtin.assert:
     that:
+      - pve_clone_template_id is defined
       - (pve_clone_template_id | int) > 0
-      - (pve_clone_target_node | default('') | length) > 0
+      - pve_clone_vmid_start is defined
       - (pve_clone_vmid_start | int) > 0
-    fail_msg: "Missing/invalid pve_clone_* vars. Ensure pve_clone_template_id, pve_clone_target_node, pve_clone_vmid_start are set."
+    fail_msg: "Missing/invalid: pve_clone_template_id (>0), pve_clone_vmid_start (>0)."
 
-- name: Assert required per-target inventory vars exist
+- name: Assert required per-target inventory vars exist (for static IP)
   ansible.builtin.assert:
     that:
       - hostvars[item].ansible_host is defined
-      - (hostvars[item].pve_prefix | default('') | int) > 0
+      - (hostvars[item].pve_prefix | default(0) | int) > 0
       - hostvars[item].pve_gateway is defined
     fail_msg: "{{ item }} must define ansible_host, pve_prefix, pve_gateway"
-  loop: "{{ pve_clone_targets }}"
+  loop: "{{ pve_clone_targets_resolved }}"
 
-- name: Build clone plan (host -> vmid), using pve_vmid if defined else pve_clone_vmid_start + index
+- name: Query Proxmox cluster resources (VM inventory)
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/cluster/resources?type=vm"
+    method: GET
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+  register: pve_cluster_vm_resources
+  changed_when: false
+  no_log: true
+
+- name: Resolve template VM entry from cluster resources
+  ansible.builtin.set_fact:
+    pve_template_entry: >-
+      {{
+        (pve_cluster_vm_resources.json.data | default([]))
+        | selectattr('vmid', 'equalto', (pve_clone_template_id | int))
+        | list
+      }}
+
+- name: Assert template VMID exists in cluster resources
+  ansible.builtin.assert:
+    that:
+      - (pve_template_entry | length) == 1
+      - (pve_template_entry[0].name | default('') | length) > 0
+      - (pve_template_entry[0].node | default('') | length) > 0
+    fail_msg: "Template VMID {{ pve_clone_template_id }} not found in cluster resources."
+
+- name: Set resolved template name + source node
+  ansible.builtin.set_fact:
+    pve_clone_template_name_resolved: "{{ pve_template_entry[0].name }}"
+    pve_clone_source_node_resolved: "{{ pve_template_entry[0].node }}"
+
+- name: Query Proxmox cluster nodes
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes"
+    method: GET
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+  register: pve_nodes_resp
+  changed_when: false
+  no_log: true
+
+- name: Extract cluster node names
+  ansible.builtin.set_fact:
+    pve_cluster_nodes: "{{ (pve_nodes_resp.json.data | default([])) | map(attribute='node') | list }}"
+
+- name: Assert resolved source node exists in the cluster
+  ansible.builtin.assert:
+    that:
+      - pve_clone_source_node_resolved in pve_cluster_nodes
+    fail_msg: "Template source node '{{ pve_clone_source_node_resolved }}' not in nodes {{ pve_cluster_nodes }}."
+
+- name: Set default target node fallback (defaults to source node)
+  ansible.builtin.set_fact:
+    pve_clone_default_target_node: "{{ pve_clone_target_node | default(pve_clone_source_node_resolved) }}"
+
+- name: Initialize clone plan list
   ansible.builtin.set_fact:
     pve_clone_plan: []
 
@@ -35,11 +111,31 @@
         pve_clone_plan + [
           {
             'host': item,
-            'vmid': (hostvars[item].pve_vmid | default(pve_clone_vmid_start + idx)) | int
+            'vmid': (hostvars[item].pve_vmid | default(pve_clone_vmid_start + idx)) | int,
+            'target_node': (
+              hostvars[item].pve_clone_target_node
+              | default(hostvars[item].clone_target_node)
+              | default(pve_clone_default_target_node)
+            ),
+            'storage': (
+              hostvars[item].pve_clone_storage
+              | default(hostvars[item].clone_storage)
+              | default(pve_clone_storage)
+            ),
+            'format': (
+              hostvars[item].pve_clone_format
+              | default(hostvars[item].clone_format)
+              | default(pve_clone_format)
+            ),
+            'pool': (
+              hostvars[item].pve_clone_pool
+              | default(hostvars[item].clone_pool)
+              | default(pve_clone_pool)
+            )
           }
         ]
       }}
-  loop: "{{ pve_clone_targets }}"
+  loop: "{{ pve_clone_targets_resolved }}"
   loop_control:
     index_var: idx
 
@@ -48,4 +144,19 @@
     that:
       - (pve_clone_plan | map(attribute='vmid') | list) | length
         == ((pve_clone_plan | map(attribute='vmid') | list) | unique | length)
-    fail_msg: "Duplicate VMIDs detected in clone plan: {{ pve_clone_plan | map(attribute='vmid') | list }}"
+    fail_msg: "Duplicate VMIDs in clone plan: {{ pve_clone_plan | map(attribute='vmid') | list }}"
+
+- name: Assert each target node exists in the cluster
+  ansible.builtin.assert:
+    that:
+      - item.target_node in pve_cluster_nodes
+    fail_msg: "Target node '{{ item.target_node }}' for '{{ item.host }}' not in nodes {{ pve_cluster_nodes }}."
+  loop: "{{ pve_clone_plan }}"
+
+- name: Show resolved clone plan
+  ansible.builtin.debug:
+    msg:
+      template_vmid: "{{ pve_clone_template_id | int }}"
+      template_name: "{{ pve_clone_template_name_resolved }}"
+      template_node: "{{ pve_clone_source_node_resolved }}"
+      plan: "{{ pve_clone_plan }}"
