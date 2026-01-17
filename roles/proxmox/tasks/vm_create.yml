@@ -1,0 +1,114 @@
+---
+- name: Check whether target VMIDs already exist in Proxmox
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ item.vmid }}"
+  loop: "{{ pve_create_plan }}"
+  register: vmid_info
+
+- name: Fail if any target VMID already exists
+  ansible.builtin.assert:
+    that:
+      - (item.proxmox_vms | default([]) | length) == 0
+    fail_msg: >-
+      VMID {{ item.item.vmid }} for {{ item.item.host }} already exists in Proxmox.
+      Choose a different pve_vmid or adjust pve_create_vmid_start.
+  loop: "{{ vmid_info.results }}"
+
+- name: Create new VMs from scratch
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+
+    # Target node where VM will be created
+    node: "{{ item.target_node }}"
+    
+    # VM identity
+    vmid: "{{ item.vmid }}"
+    name: "{{ item.host }}"
+    
+    # Hardware configuration
+    cores: "{{ item.cores }}"
+    sockets: "{{ item.sockets }}"
+    memory: "{{ item.memory }}"
+    cpu: "{{ item.cpu }}"
+    
+    # BIOS/Boot
+    bios: "{{ item.bios }}"
+    machine: "{{ item.machine }}"
+    boot: "{{ item.boot }}"
+    
+    # Operating system type (affects defaults)
+    ostype: "{{ item.ostype }}"
+    
+    # Storage - main disk
+    scsi: "{{ item.scsi }}"
+    scsihw: "{{ item.scsihw }}"
+    
+    # Network
+    net: "{{ item.net }}"
+    
+    # ISO/CDROM (if specified)
+    ide: "{{ item.ide if ((item.ide | default('') | string | length) > 0) else omit }}"
+    
+    # Additional options
+    agent: "{{ item.agent }}"
+    onboot: "{{ item.onboot }}"
+    protection: "{{ item.protection }}"
+    tags: "{{ item.tags if ((item.tags | default('') | string | length) > 0) else omit }}"
+    pool: "{{ item.pool if ((item.pool | default('') | string | length) > 0) else omit }}"
+    
+    # Cloud-init (if using cloud-init)
+    ipconfig: "{{ item.ipconfig if item.ipconfig is defined else omit }}"
+    ciuser: "{{ item.ciuser if ((item.ciuser | default('') | string | length) > 0) else omit }}"
+    cipassword: "{{ item.cipassword if ((item.cipassword | default('') | string | length) > 0) else omit }}"
+    sshkeys: "{{ item.sshkeys if ((item.sshkeys | default('') | string | length) > 0) else omit }}"
+    
+    state: present
+    timeout: "{{ pve_create_timeout | default(300) }}"
+  loop: "{{ pve_create_plan }}"
+  register: create_result
+
+- name: Wait until created VMs appear in Proxmox inventory
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ item.vmid }}"
+  register: wait_vm
+  until: (wait_vm.proxmox_vms | default([]) | length) == 1
+  retries: 30
+  delay: 5
+  loop: "{{ pve_create_plan }}"
+  changed_when: false
+
+- name: Start created VMs (if configured to auto-start)
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    node: "{{ item.target_node }}"
+    vmid: "{{ item.vmid }}"
+    state: started
+    timeout: "{{ pve_timeout | default(300) }}"
+  loop: "{{ pve_create_plan }}"
+  when: item.autostart | default(false) | bool

@@ -1,48 +1,32 @@
 ---
-# These tasks assumes these already exist somewhere (ex; group_vars, defaults, vault):
-#   pve_api_host
-#   pve_api_port        (optional, defaults to 8006)
-#   pve_api_user
-#   pve_token_name
-#   pve_api_token_secret
-#   pve_validate_certs  (optional, defaults to false)
-
 - name: Assert required Proxmox API variables are defined
   ansible.builtin.assert:
     that:
       - pve_api_host is defined
       - pve_api_user is defined
-      - pve_api_token_name is defined
+      - pve_api_token_full_id is defined
       - pve_api_token_secret is defined
     fail_msg: >
-      One or more required Proxmox variables are missing!
-      pve_api_host defined: {{ pve_api_host is defined }} ||
-      pve_api_user defined: {{ pve_api_user is defined }} ||
-      pve_token_name defined: {{ pve_token_name is defined }} ||
-      pve_api_token_secret defined: {{ pve_api_token_secret is defined }}.
+      Missing required Proxmox vars.
+      Need: pve_api_host, pve_api_user, pve_api_token_full_id, pve_api_token_secret.
 
-# Network-level check (ICMP ping)
 - name: Ping Proxmox API host from control node
   ansible.builtin.command: "ping -c3 -W5 {{ pve_api_host }}"
   register: pve_icmp_ping
   changed_when: false
   failed_when: pve_icmp_ping.rc != 0
 
-# API-level + auth check
-- name: cURL Proxmox API /version endpoint with token
+- name: Query Proxmox API /version endpoint with token
   ansible.builtin.uri:
     url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/version"
     method: GET
     validate_certs: "{{ pve_validate_certs | default(false) }}"
     return_content: true
-    status_code:
-      - 200
+    status_code: [200]
     headers:
-      # Proxmox token auth: PVEAPIToken=<user@realm!tokenid>=<secret>
-      Authorization: "PVEAPIToken={{ pve_api_token_id }}={{ pve_api_token_secret }}"
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
   register: pve_api_ping
   changed_when: false
-  # Prevent spillage
   no_log: true
 
 - name: Verify Proxmox API response contains version data
@@ -51,9 +35,7 @@
       - pve_api_ping.json is defined
       - pve_api_ping.json.data is defined
       - pve_api_ping.json.data.version is defined
-    fail_msg: >
-      Reached Proxmox API but did not get the expected version data.
-      Check your token permissions and API URL.
+    fail_msg: "Reached Proxmox API but did not get expected version data; check token permissions."
 
 - name: Show returned Proxmox version
   ansible.builtin.debug:

@@ -1,0 +1,221 @@
+---
+- name: Skip create workflow when disabled
+  ansible.builtin.debug:
+    msg: "pve_create_enabled=false; skipping create workflow."
+  when: not (pve_create_enabled | default(true) | bool)
+
+- name: End play when create workflow is disabled
+  ansible.builtin.meta: end_play
+  when: not (pve_create_enabled | default(true) | bool)
+
+- name: Determine create targets list
+  ansible.builtin.set_fact:
+    pve_create_targets_resolved: "{{ pve_create_targets }}"
+
+- name: Assert create targets list is not empty
+  ansible.builtin.assert:
+    that:
+      - (pve_create_targets_resolved | length) > 0
+    fail_msg: >-
+      No create targets found. Populate inventory group 'pve_vms_to_create'
+      or set pve_create_targets explicitly.
+
+- name: Assert required global create variables exist
+  ansible.builtin.assert:
+    that:
+      - pve_create_vmid_start is defined
+      - (pve_create_vmid_start | int) > 0
+    fail_msg: "Missing/invalid: pve_create_vmid_start (>0)."
+
+- name: Query Proxmox cluster nodes
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes"
+    method: GET
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+  register: pve_nodes_resp
+  changed_when: false
+  no_log: true
+
+- name: Extract cluster node names
+  ansible.builtin.set_fact:
+    pve_cluster_nodes: "{{ (pve_nodes_resp.json.data | default([])) | map(attribute='node') | list }}"
+
+- name: Set default target node fallback
+  ansible.builtin.set_fact:
+    pve_create_default_target_node: "{{ pve_create_target_node | default(pve_api_host) }}"
+
+- name: Assert default target node exists in the cluster
+  ansible.builtin.assert:
+    that:
+      - pve_create_default_target_node in pve_cluster_nodes
+    fail_msg: "Default target node '{{ pve_create_default_target_node }}' not in nodes {{ pve_cluster_nodes }}."
+
+- name: Initialize create plan list
+  ansible.builtin.set_fact:
+    pve_create_plan: []
+
+- name: Build create plan for each target
+  ansible.builtin.set_fact:
+    pve_create_plan: >-
+      {{
+        pve_create_plan + [
+          {
+            'host': item,
+            'vmid': (hostvars[item].pve_vmid | default(pve_create_vmid_start + idx)) | int,
+            'target_node': (
+              hostvars[item].pve_create_target_node
+              | default(hostvars[item].create_target_node)
+              | default(pve_create_default_target_node)
+            ),
+            'cores': (
+              hostvars[item].pve_cores
+              | default(hostvars[item].vm_cores)
+              | default(pve_create_cores)
+            ) | int,
+            'sockets': (
+              hostvars[item].pve_sockets
+              | default(hostvars[item].vm_sockets)
+              | default(pve_create_sockets)
+            ) | int,
+            'memory': (
+              hostvars[item].pve_memory
+              | default(hostvars[item].vm_memory)
+              | default(pve_create_memory)
+            ) | int,
+            'cpu': (
+              hostvars[item].pve_cpu
+              | default(hostvars[item].vm_cpu)
+              | default(pve_create_cpu)
+            ),
+            'bios': (
+              hostvars[item].pve_bios
+              | default(hostvars[item].vm_bios)
+              | default(pve_create_bios)
+            ),
+            'machine': (
+              hostvars[item].pve_machine
+              | default(hostvars[item].vm_machine)
+              | default(pve_create_machine)
+            ),
+            'boot': (
+              hostvars[item].pve_boot
+              | default(hostvars[item].vm_boot)
+              | default(pve_create_boot)
+            ),
+            'ostype': (
+              hostvars[item].pve_ostype
+              | default(hostvars[item].vm_ostype)
+              | default(pve_create_ostype)
+            ),
+            'scsi': (
+              hostvars[item].pve_scsi
+              | default(hostvars[item].vm_scsi)
+              | default({
+                'scsi0': pve_create_storage + ':' + (pve_create_disk_size | string) + ',iothread=1'
+              })
+            ),
+            'scsihw': (
+              hostvars[item].pve_scsihw
+              | default(hostvars[item].vm_scsihw)
+              | default(pve_create_scsihw)
+            ),
+            'net': (
+              hostvars[item].pve_net
+              | default(hostvars[item].vm_net)
+              | default({
+                'net0': 'virtio,bridge=' + pve_create_bridge + ((',tag=' + (hostvars[item].pve_vlan | default(pve_create_vlan) | string)) if (hostvars[item].pve_vlan | default(pve_create_vlan) | default('')) != '' else '')
+              })
+            ),
+            'ide': (
+              hostvars[item].pve_ide
+              | default(hostvars[item].vm_ide)
+              | default((
+                {'ide2': pve_create_iso + ',media=cdrom'} if pve_create_iso != '' else {}
+              ))
+            ),
+            'agent': (
+              hostvars[item].pve_agent
+              | default(hostvars[item].vm_agent)
+              | default(pve_create_agent)
+            ) | default('enabled=1') if (
+              hostvars[item].pve_agent
+              | default(hostvars[item].vm_agent)
+              | default(pve_create_agent)
+            ) else omit,
+            'onboot': (
+              hostvars[item].pve_onboot
+              | default(hostvars[item].vm_onboot)
+              | default(pve_create_onboot)
+            ) | bool,
+            'protection': (
+              hostvars[item].pve_protection
+              | default(hostvars[item].vm_protection)
+              | default(pve_create_protection)
+            ) | bool,
+            'tags': (
+              hostvars[item].pve_tags
+              | default(hostvars[item].vm_tags)
+              | default(pve_create_tags)
+            ),
+            'pool': (
+              hostvars[item].pve_pool
+              | default(hostvars[item].vm_pool)
+              | default(pve_create_pool)
+            ),
+            'ipconfig': (
+              hostvars[item].pve_ipconfig
+              | default(
+                {'ipconfig0': 'ip=' + hostvars[item].ansible_host + '/' + (hostvars[item].pve_prefix | string) + ',gw=' + hostvars[item].pve_gateway}
+                if (hostvars[item].ansible_host is defined and hostvars[item].pve_prefix is defined and hostvars[item].pve_gateway is defined)
+                else {}
+              )
+            ) if pve_create_use_cloudinit | default(false) | bool else {},
+            'ciuser': (
+              hostvars[item].pve_ciuser
+              | default(hostvars[item].vm_ciuser)
+              | default(pve_create_ciuser)
+            ) if pve_create_use_cloudinit | default(false) | bool else '',
+            'cipassword': (
+              hostvars[item].pve_cipassword
+              | default(hostvars[item].vm_cipassword)
+              | default(pve_create_cipassword)
+            ) if pve_create_use_cloudinit | default(false) | bool else '',
+            'sshkeys': (
+              hostvars[item].pve_sshkeys
+              | default(hostvars[item].vm_sshkeys)
+              | default(pve_create_sshkeys)
+            ) if pve_create_use_cloudinit | default(false) | bool else '',
+            'autostart': (
+              hostvars[item].pve_autostart
+              | default(hostvars[item].vm_autostart)
+              | default(pve_create_autostart)
+            ) | bool
+          }
+        ]
+      }}
+  loop: "{{ pve_create_targets_resolved }}"
+  loop_control:
+    index_var: idx
+
+- name: Assert computed VMIDs are unique
+  ansible.builtin.assert:
+    that:
+      - (pve_create_plan | map(attribute='vmid') | list) | length
+        == ((pve_create_plan | map(attribute='vmid') | list) | unique | length)
+    fail_msg: "Duplicate VMIDs in create plan: {{ pve_create_plan | map(attribute='vmid') | list }}"
+
+- name: Assert each target node exists in the cluster
+  ansible.builtin.assert:
+    that:
+      - item.target_node in pve_cluster_nodes
+    fail_msg: "Target node '{{ item.target_node }}' for '{{ item.host }}' not in nodes {{ pve_cluster_nodes }}."
+  loop: "{{ pve_create_plan }}"
+
+- name: Show resolved create plan
+  ansible.builtin.debug:
+    msg:
+      plan: "{{ pve_create_plan }}"

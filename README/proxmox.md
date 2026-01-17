@@ -106,3 +106,6 @@ With community.general.pve_kvm you’re **not** SSH’ing into the Proxmox node;
 ### Fix Permissions Issues
 pveum role add AnsibleVMStart -privs "VM.Audit VM.PowerMgmt"
 pveum aclmod /vms -user ansible@pve -role AnsibleVMStart
+# Gives ansible user access to everything
+pveum aclmod / -user ansible@pve -role PVEVMAdmin
+

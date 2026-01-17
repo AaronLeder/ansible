@@ -3,13 +3,21 @@
 - name: Proxmox Host Connectivity
   hosts: localhost
   connection: local
-  gather_facts: false  
+  gather_facts: false
+
+  vars:
+    pve_api_host: "walnut"
+    pve_api_port: 8006
+    pve_api_user: "ansible@pve"
+    pve_api_token_id: "ansible-maint001"              # token name ONLY (for community.proxmox)
+    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"  # for uri header
+    pve_validate_certs: false
 
   vars_files:
     - ../vault/aaron-homelab.yml
   roles:
     - proxmox
-  tags: 
+  tags:
     - pve_connectivity
 
 # ===== VM State ===== #
@@ -19,18 +27,20 @@
   gather_facts: false
 
   vars:
-    pve_api_host: "walnut"   # or FQDN
+    pve_api_host: "walnut"
+    pve_api_port: 8006
     pve_api_user: "ansible@pve"
-    pve_api_token_name: "ansible-maint001"
-    pve_api_token_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
+    pve_api_token_id: "ansible-maint001"
+    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"
     pve_validate_certs: false
     pve_timeout: 300
-    # Define the state. You can leave this empty to skip.
-    pve_vm_state: stopped
-    # Define which VMs to modify on which Proxmox host
-    # Acceptable formats: [151, 152] or [151,152] or list
+
+    # Define the state. Leave undefined or null to skip VM state tasks
+    pve_vm_state: 
+
+    # Map of VMIDs per Proxmox node (key must match inventory_hostname_short)
     pve_vm_map:
-      walnut: [151,152]
+      walnut: [151, 152]
       rainbow: []
       cheddar: []
       squeak: []
@@ -42,33 +52,109 @@
   tags:
     - pve_state_vms
 
-# ===== VM Clone ===== #
-- name: Clone Proxmox VMs for hosts in pve_vms_to_clone
+# ===== VM Create from Scratch ===== #
+- name: Create new Proxmox VMs from scratch
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
-    pve_api_host: "walnut"   # or FQDN
+    pve_api_host: "walnut"
+    pve_api_port: 8006
     pve_api_user: "ansible@pve"
-    pve_api_token_name: "ansible-maint001"
-    pve_api_token_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
+    pve_api_token_id: "ansible-maint001"
+    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"
     pve_validate_certs: false
-    pve_timeout: 300
 
-    # Clone params
-    pve_clone_template_id: 100      # Proxmox template VMID to clone
-    pve_clone_target_node: walnut   # Node where the template resides (and default target node)
-    pve_clone_storage: mydata       # Target storage for full clones
-    pve_clone_format: qcow2         # Disk format (may be ignored/invalid on some storage types)
-    pve_clone_pool: ""              # Optional pool name (empty = omit)
-    pve_clone_vmid_start: 100       # Starting VMID when a host does not define pve_vmid
-    pve_clone_full: true            # full clone vs linked clone
-    pve_clone_timeout: 900          # seconds
+    # Enable/disable create workflow
+    pve_create_enabled: true
+
+    # VM identification
+    pve_create_vmid_start: 200
+    pve_create_target_node: "walnut"
+
+    # Hardware configuration
+    pve_create_cores: 4
+    pve_create_sockets: 1
+    pve_create_memory: 8192
+    pve_create_cpu: "host"
+
+    # BIOS/Machine
+    pve_create_bios: "seabios"
+    pve_create_machine: "q35"
+    pve_create_boot: "order=scsi0;ide2;net0"
+    pve_create_ostype: "l26"
+
+    # Storage
+    pve_create_storage: "mydata"
+    pve_create_disk_size: "50G"
+    pve_create_scsihw: "virtio-scsi-single"
+
+    # Network
+    pve_create_bridge: "nic1"
+    pve_create_vlan: "29"
+
+    # ISO - Use existing ISO from Proxmox storage
+    # Format: "storage:iso/filename.iso"
+    # Leave empty for no ISO attached
+    pve_create_iso: "local:iso/ubuntu-24.04.3-live-server-amd64.iso"
+
+    # Additional options
+    pve_create_agent: "enabled=1"
+    pve_create_onboot: false
+    pve_create_protection: false
+    pve_create_tags: ""
+    pve_create_pool: ""
+
+    # Cloud-init configuration (optional)
+    pve_create_use_cloudinit: false
+    pve_create_ciuser: "user"
+    pve_create_cipassword: ""  # Consider using vault
+    pve_create_sshkeys: ""
+
+    # Auto-start after creation
+    pve_create_autostart: false
+
+    pve_create_timeout: 300
 
   vars_files:
     - ../vault/aaron-homelab.yml
   roles:
     - proxmox
   tags:
-    - pve_clone_vms
+    - pve_create_vms
+
+# Ultimately untested
+# ===== VM Clone ===== #
+#- name: Clone Proxmox VMs for hosts in pve_vms_to_clone
+#  hosts: localhost
+#  connection: local
+#  gather_facts: false
+#
+#  vars:
+#    pve_api_host: "walnut"
+#    pve_api_port: 8006
+#    pve_api_user: "ansible@pve"
+#    pve_api_token_id: "ansible-maint001"
+#    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"
+#    pve_validate_certs: false
+#
+#    # Enable/disable clone workflow cleanly
+#    pve_clone_enabled: true
+#
+#    # Clone params
+#    pve_clone_template_id: 100
+#    pve_clone_storage: mydata
+#    pve_clone_format: qcow2
+#    pve_clone_pool: ""
+#    pve_clone_vmid_start: 100
+#    pve_clone_full: true
+#    pve_clone_timeout: 900
+#
+#  vars_files:
+#    - ../vault/aaron-homelab.yml
+#  roles:
+#    - proxmox
+#  tags:
+#    - pve_clone_vms
+

@@ -1,16 +1,16 @@
 ---
 - name: Ensure Ansible controller is configured for community.proxmox
-  when: setup_ansible is true
-  block: 
+  when: (setup_ansible | default(false) | bool)
+  block:
     - name: Install Proxmox Collection
       ansible.builtin.command: ansible-galaxy collection install community.proxmox
       register: ansible_proxmox
       failed_when: ansible_proxmox.rc != 0
-    
+
     - name: Install dependencies
       become: true
       ansible.builtin.apt:
-        name: 
+        name:
           - python3-proxmoxer
           - python3-requests
         state: present
@@ -31,12 +31,36 @@
   tags:
     - pve_state_vms
 
-- name: Clone VMs
-  block: 
-    - name: Preflight checks and clone plan
-      ansible.builtin.import_tasks: vm_clone_preflight.yml
-    
-    - name: Clone designated VMs
-      ansible.builtin.include_tasks: vm_clone.yml
+- name: Create VMs from scratch
+  when: (pve_create_enabled | default(false) | bool)
+  block:
+    - name: Preflight checks and create plan
+      ansible.builtin.import_tasks: vm_create_preflight.yml
+
+    - name: Create designated VMs
+      ansible.builtin.include_tasks: vm_create.yml
   tags:
-    - pve_clone_vms
+    - pve_create_vms
+
+# These are ultimately untested!
+#- name: Clone VMs
+#  when: (pve_clone_enabled | default(true) | bool)
+#  block:
+#    - name: Preflight checks and clone plan
+#      ansible.builtin.import_tasks: vm_clone_preflight.yml
+#
+#    - name: Clone designated VMs
+#      ansible.builtin.include_tasks: vm_clone_nontemplate.yml
+#  tags:
+#    - pve_clone_vms
+#
+#- name: Clone VMs
+#  when: (pve_clone_enabled | default(true) | bool)
+#  block:
+#    - name: Preflight checks and clone plan
+#      ansible.builtin.import_tasks: vm_clone_preflight.yml
+#
+#    - name: Clone designated VMs
+#      ansible.builtin.include_tasks: vm_clone_template.yml
+#  tags:
+#    - pve_clone_vms
