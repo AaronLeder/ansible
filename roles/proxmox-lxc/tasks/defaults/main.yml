@@ -1,0 +1,17 @@
+# ===== Proxmox Defaults ===== #
+pve_api_host: "walnut"
+pve_api_port: 8006
+pve_api_user: "ansible@pve"
+
+# Token name ONLY for community.proxmox modules
+pve_api_token_name: "ansible-maint001"
+pve_api_token_id: "{{ pve_api_token_name }}"
+
+# Full "user@realm!tokenname" ONLY for raw REST Authorization header usage
+pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
+
+# Proxmox token secret must come from vault/group_vars/extra-vars
+# pve_api_token_secret: "..."
+
+pve_validate_certs: false
+pve_timeout: 300

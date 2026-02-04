@@ -17,15 +17,24 @@
     that:
       - (pve_create_targets_resolved | length) > 0
     fail_msg: >-
-      No create targets found. Populate inventory group 'pve_vms_to_create'
-      or set pve_create_targets explicitly.
+      No create targets found. Set pve_create_vms list in playbook
+      or populate inventory group 'pve_vms_to_create'.
 
-- name: Assert required global create variables exist
+- name: Assert required per-host inventory vars exist
   ansible.builtin.assert:
     that:
-      - pve_create_vmid_start is defined
-      - (pve_create_vmid_start | int) > 0
-    fail_msg: "Missing/invalid: pve_create_vmid_start (>0)."
+      - hostvars[item].ansible_host is defined
+      - hostvars[item].pve_vmid is defined
+    fail_msg: "{{ item }} must define ansible_host and pve_vmid in inventory"
+  loop: "{{ pve_create_targets_resolved }}"
+
+- name: Assert required network vars exist (from inventory or group_vars)
+  ansible.builtin.assert:
+    that:
+      - hostvars[item].pve_create_prefix is defined
+      - hostvars[item].pve_create_gateway is defined
+    fail_msg: "{{ item }} must have pve_create_prefix and pve_create_gateway defined (in inventory or group_vars)"
+  loop: "{{ pve_create_targets_resolved }}"
 
 - name: Query Proxmox cluster nodes
   ansible.builtin.uri:
@@ -65,7 +74,7 @@
         pve_create_plan + [
           {
             'host': item,
-            'vmid': (hostvars[item].pve_vmid | default(pve_create_vmid_start + idx)) | int,
+            'vmid': hostvars[item].pve_vmid | int,
             'target_node': (
               hostvars[item].pve_create_target_node
               | default(hostvars[item].create_target_node)
@@ -73,125 +82,101 @@
             ),
             'cores': (
               hostvars[item].pve_cores
-              | default(hostvars[item].vm_cores)
               | default(pve_create_cores)
             ) | int,
             'sockets': (
               hostvars[item].pve_sockets
-              | default(hostvars[item].vm_sockets)
               | default(pve_create_sockets)
             ) | int,
             'memory': (
               hostvars[item].pve_memory
-              | default(hostvars[item].vm_memory)
               | default(pve_create_memory)
             ) | int,
             'cpu': (
               hostvars[item].pve_cpu
-              | default(hostvars[item].vm_cpu)
               | default(pve_create_cpu)
             ),
             'bios': (
               hostvars[item].pve_bios
-              | default(hostvars[item].vm_bios)
               | default(pve_create_bios)
             ),
             'machine': (
               hostvars[item].pve_machine
-              | default(hostvars[item].vm_machine)
               | default(pve_create_machine)
             ),
             'boot': (
               hostvars[item].pve_boot
-              | default(hostvars[item].vm_boot)
               | default(pve_create_boot)
             ),
             'ostype': (
               hostvars[item].pve_ostype
-              | default(hostvars[item].vm_ostype)
               | default(pve_create_ostype)
             ),
             'scsi': (
               hostvars[item].pve_scsi
-              | default(hostvars[item].vm_scsi)
               | default({
-                'scsi0': pve_create_storage + ':' + (pve_create_disk_size | string) + ',iothread=1'
+                'scsi0': (hostvars[item].pve_create_storage | default(pve_create_storage)) + ':' + ((hostvars[item].pve_disk_size | default(pve_create_disk_size)) | string) + ',iothread=1'
               })
             ),
             'scsihw': (
               hostvars[item].pve_scsihw
-              | default(hostvars[item].vm_scsihw)
               | default(pve_create_scsihw)
             ),
             'net': (
               hostvars[item].pve_net
-              | default(hostvars[item].vm_net)
               | default({
-                'net0': 'virtio,bridge=' + pve_create_bridge + ((',tag=' + (hostvars[item].pve_vlan | default(pve_create_vlan) | string)) if (hostvars[item].pve_vlan | default(pve_create_vlan) | default('')) != '' else '')
+                'net0': 'virtio,bridge=' + (hostvars[item].pve_bridge | default(pve_create_bridge)) + ',tag=' + ((hostvars[item].pve_vlan | default(pve_create_vlan)) | string)
               })
             ),
             'ide': (
               hostvars[item].pve_ide
-              | default(hostvars[item].vm_ide)
               | default((
-                {'ide2': pve_create_iso + ',media=cdrom'} if pve_create_iso != '' else {}
+                {'ide2': (hostvars[item].pve_iso | default(pve_create_iso)) + ',media=cdrom'} if (hostvars[item].pve_iso | default(pve_create_iso)) != '' else {}
               ))
             ),
             'agent': (
               hostvars[item].pve_agent
-              | default(hostvars[item].vm_agent)
               | default(pve_create_agent)
             ) | default('enabled=1') if (
               hostvars[item].pve_agent
-              | default(hostvars[item].vm_agent)
               | default(pve_create_agent)
             ) else omit,
             'onboot': (
               hostvars[item].pve_onboot
-              | default(hostvars[item].vm_onboot)
               | default(pve_create_onboot)
             ) | bool,
             'protection': (
               hostvars[item].pve_protection
-              | default(hostvars[item].vm_protection)
               | default(pve_create_protection)
             ) | bool,
             'tags': (
               hostvars[item].pve_tags
-              | default(hostvars[item].vm_tags)
               | default(pve_create_tags)
             ),
             'pool': (
               hostvars[item].pve_pool
-              | default(hostvars[item].vm_pool)
               | default(pve_create_pool)
             ),
             'ipconfig': (
               hostvars[item].pve_ipconfig
               | default(
                 {'ipconfig0': 'ip=' + hostvars[item].ansible_host + '/' + (hostvars[item].pve_prefix | string) + ',gw=' + hostvars[item].pve_gateway}
-                if (hostvars[item].ansible_host is defined and hostvars[item].pve_prefix is defined and hostvars[item].pve_gateway is defined)
-                else {}
               )
             ) if pve_create_use_cloudinit | default(false) | bool else {},
             'ciuser': (
               hostvars[item].pve_ciuser
-              | default(hostvars[item].vm_ciuser)
               | default(pve_create_ciuser)
             ) if pve_create_use_cloudinit | default(false) | bool else '',
             'cipassword': (
               hostvars[item].pve_cipassword
-              | default(hostvars[item].vm_cipassword)
               | default(pve_create_cipassword)
             ) if pve_create_use_cloudinit | default(false) | bool else '',
             'sshkeys': (
               hostvars[item].pve_sshkeys
-              | default(hostvars[item].vm_sshkeys)
               | default(pve_create_sshkeys)
             ) if pve_create_use_cloudinit | default(false) | bool else '',
             'autostart': (
               hostvars[item].pve_autostart
-              | default(hostvars[item].vm_autostart)
               | default(pve_create_autostart)
             ) | bool
           }
