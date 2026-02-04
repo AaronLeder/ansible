@@ -42,6 +42,9 @@
 #     reload: yes
 #   become: true
 
+# Elastic's documentation recommends 0, but 1 is arguably better
+# It would allow the OS to crash Elastic, instead of the host crashing
+# If it were to run out of memory
 - name: Set Swappiness to 1
   ansible.builtin.lineinfile:
     path: /etc/sysctl.conf
@@ -51,6 +54,7 @@
   become: true
   notify: "sysctl changed"
 
+# Need to check if this is necessary
 - name: Set Locked Memory to Unlimited
   ansible.builtin.lineinfile:
     path: /usr/lib/systemd/system/elasticsearch.service

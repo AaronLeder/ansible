@@ -1,0 +1,30 @@
+---
+# Kibana group variables
+# File: group_vars/kibana.yml
+
+# Network configuration
+pve_create_prefix: 24
+pve_create_gateway: 192.168.30.1
+
+# Hardware configuration for Kibana
+pve_create_cores: 2
+pve_create_memory: 4096  # 4GB RAM
+pve_create_sockets: 1
+
+# Storage
+pve_create_storage: "mydata"
+pve_create_disk_size: "50G"
+
+# Network
+pve_create_vlan: "29"
+
+# BIOS/Boot
+pve_create_bios: "seabios"
+pve_create_machine: "q35"
+pve_create_ostype: "l26"
+
+# Additional options
+pve_create_agent: "enabled=1"
+pve_create_onboot: true
+pve_create_protection: false
+pve_create_tags: "kibana,elasticsearch,production"

@@ -9,14 +9,14 @@
     pve_api_host: "walnut"
     pve_api_port: 8006
     pve_api_user: "ansible@pve"
-    pve_api_token_id: "ansible-maint001"              # token name ONLY (for community.proxmox)
-    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"  # for uri header
+    pve_api_token_id: "ansible-maint001"
+    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"
     pve_validate_certs: false
 
   vars_files:
     - ../vault/aaron-homelab.yml
   roles:
-    - proxmox
+    - proxmox-host
   tags:
     - pve_connectivity
 
@@ -50,83 +50,10 @@
   roles:
     - proxmox
   tags:
-    - pve_state_vms
+    - pve_state_vm
 
-# ===== VM Create from Scratch ===== #
-- name: Create new Proxmox VMs from scratch
-  hosts: localhost
-  connection: local
-  gather_facts: false
-
-  vars:
-    pve_api_host: "walnut"
-    pve_api_port: 8006
-    pve_api_user: "ansible@pve"
-    pve_api_token_id: "ansible-maint001"
-    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"
-    pve_validate_certs: false
-
-    # Enable/disable create workflow
-    pve_create_enabled: true
-
-    # VM identification
-    pve_create_vmid_start: 200
-    pve_create_target_node: "walnut"
-
-    # Hardware configuration
-    pve_create_cores: 4
-    pve_create_sockets: 1
-    pve_create_memory: 8192
-    pve_create_cpu: "host"
-
-    # BIOS/Machine
-    pve_create_bios: "seabios"
-    pve_create_machine: "q35"
-    pve_create_boot: "order=scsi0;ide2;net0"
-    pve_create_ostype: "l26"
-
-    # Storage
-    pve_create_storage: "mydata"
-    pve_create_disk_size: "50G"
-    pve_create_scsihw: "virtio-scsi-single"
-
-    # Network
-    pve_create_bridge: "nic1"
-    pve_create_vlan: "29"
-
-    # ISO - Use existing ISO from Proxmox storage
-    # Format: "storage:iso/filename.iso"
-    # Leave empty for no ISO attached
-    pve_create_iso: "local:iso/ubuntu-24.04.3-live-server-amd64.iso"
-
-    # Additional options
-    pve_create_agent: "enabled=1"
-    pve_create_onboot: false
-    pve_create_protection: false
-    pve_create_tags: ""
-    pve_create_pool: ""
-
-    # Cloud-init configuration (optional)
-    pve_create_use_cloudinit: false
-    pve_create_ciuser: "user"
-    pve_create_cipassword: ""  # Consider using vault
-    pve_create_sshkeys: ""
-
-    # Auto-start after creation
-    pve_create_autostart: false
-
-    pve_create_timeout: 300
-
-  vars_files:
-    - ../vault/aaron-homelab.yml
-  roles:
-    - proxmox
-  tags:
-    - pve_create_vms
-
-# Ultimately untested
 # ===== VM Clone ===== #
-#- name: Clone Proxmox VMs for hosts in pve_vms_to_clone
+#- name: Clone Proxmox VMs for hosts in pve_vm_to_clone
 #  hosts: localhost
 #  connection: local
 #  gather_facts: false
@@ -156,5 +83,73 @@
 #  roles:
 #    - proxmox
 #  tags:
-#    - pve_clone_vms
+#    - pve_clone_vm
 
+# ===== VM Create ===== #
+- name: Create new Proxmox VMs from scratch
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    pve_api_host: "walnut"
+    pve_api_port: 8006
+    pve_api_user: "ansible@pve"
+    pve_api_token_id: "ansible-maint001"
+    pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_id }}"
+    pve_validate_certs: false
+
+    # Enable create workflow
+    pve_create_enabled: true
+
+    # List the VMs to create (pulls config from inventory)
+    pve_create_vm:
+      - elastic001.aaron.lan
+      #- elastic002.aaron.lan
+      #- elastic003.aaron.lan
+
+    # Hardware configuration
+    pve_create_cores: 4
+    pve_create_sockets: 1
+    pve_create_memory: 12288
+    pve_create_cpu: "host"
+
+    # BIOS/Machine
+    pve_create_bios: "seabios"
+    pve_create_machine: "q35"
+    pve_create_boot: "order=scsi0;ide2;net0"
+    pve_create_ostype: "l26"
+
+    # Storage
+    pve_create_storage: "mydata"
+    pve_create_disk_size: "100G"
+    pve_create_scsihw: "virtio-scsi-single"
+
+    # Network - Using vmbr1 with VLAN 29
+    pve_create_bridge: "vmbr1"
+    pve_create_vlan: "29"
+
+    # ISO - Use existing ISO from Proxmox storage
+    pve_create_iso: "local:iso/ubuntu-24.04.3-live-server-amd64.iso"
+
+    # Additional options
+    pve_create_agent: "enabled=1"
+    pve_create_onboot: false
+    pve_create_protection: false
+    pve_create_tags: "elasticsearch,production"
+    pve_create_pool: ""
+
+    # Cloud-init configuration (optional)
+    pve_create_use_cloudinit: false
+
+    # Auto-start after creation
+    pve_create_autostart: false
+
+    pve_create_timeout: 300
+
+  vars_files:
+    - ../vault/aaron-homelab.yml
+  roles:
+    - proxmox-vm
+  tags:
+    - pve_create_vm

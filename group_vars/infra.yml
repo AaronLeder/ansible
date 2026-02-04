@@ -1,0 +1,30 @@
+---
+# Infrastructure/Maintenance VMs group variables
+# File: group_vars/infra.yml
+
+# Network configuration (shared by all infra hosts)
+pve_create_prefix: 29
+pve_create_gateway: 192.168.29.1
+
+# Hardware configuration for infra VMs
+pve_create_cores: 4
+pve_create_memory: 8192  # 8GB RAM
+pve_create_sockets: 1
+
+# Storage
+pve_create_storage: "mydata"
+pve_create_disk_size: "50G"
+
+# Network - using VLAN 29
+pve_create_vlan: "29"
+
+# BIOS/Boot
+pve_create_bios: "seabios"
+pve_create_machine: "q35"
+pve_create_ostype: "l26"
+
+# Additional options
+pve_create_agent: "enabled=1"
+pve_create_onboot: true
+pve_create_protection: false
+pve_create_tags: "infra,maintenance"

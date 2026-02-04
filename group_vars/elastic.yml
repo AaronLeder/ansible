@@ -1,0 +1,33 @@
+---
+# Elasticsearch cluster group variables
+# File: group_vars/elastic.yml
+
+# Network configuration (shared by all elastic hosts)
+pve_create_prefix: 24
+pve_create_gateway: 192.168.30.1
+
+# Hardware configuration for Elasticsearch VMs
+pve_create_cores: 4
+pve_create_memory: 16384  # 16GB RAM
+pve_create_sockets: 1
+
+# Storage
+pve_create_storage: "mydata"
+pve_create_disk_size: "100G"
+
+# Network (if different from defaults)
+# pve_create_vlan: "30"  # Uncomment to override default VLAN 29
+
+# BIOS/Boot
+pve_create_bios: "seabios"
+pve_create_machine: "q35"
+pve_create_ostype: "l26"
+
+# Additional options
+pve_create_agent: "enabled=1"
+pve_create_onboot: true
+pve_create_protection: false
+pve_create_tags: "elasticsearch,production"
+
+# ISO to use (if different from playbook default)
+# pve_create_iso: "local:iso/ubuntu-24.04.2-server-amd64.iso"

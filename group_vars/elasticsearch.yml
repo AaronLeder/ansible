@@ -49,3 +49,4 @@ elastic_required_packages:
   #- apt-transport-https [this might not be needed anymore]
   - gpg
   - nfs-kernel-server
+  

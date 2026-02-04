@@ -51,15 +51,7 @@
 #        dest: /etc/elasticsearch/
 #        owner: elasticsearch
 #        group: root
-#        mode: '0770'
-#
-#    - name: Download Elasticsearch GPG key
-#      ansible.builtin.get_url:
-#        url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
-#        dest: /tmp/GPG-KEY-elasticsearch
-#        mode: '0644'
-#      delegate_to: localhost
-#      when: gpgKey == yes
+#        mode: "0770"
 
 - name: Install GPG Key if chosen
   ansible.builtin.include_tasks: install_gpg_key.yml
