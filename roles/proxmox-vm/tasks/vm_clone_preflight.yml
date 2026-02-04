@@ -10,14 +10,14 @@
 
 - name: Determine clone targets list
   ansible.builtin.set_fact:
-    pve_clone_targets_resolved: "{{ pve_clone_targets | default(groups['pve_vms_to_clone'] | default([])) }}"
+    pve_clone_targets_resolved: "{{ pve_clone_targets | default(groups['pve_vm_to_clone'] | default([])) }}"
 
 - name: Assert clone targets list is not empty
   ansible.builtin.assert:
     that:
       - (pve_clone_targets_resolved | length) > 0
     fail_msg: >-
-      No clone targets found. Populate inventory group 'pve_vms_to_clone'
+      No clone targets found. Populate inventory group 'pve_vm_to_clone'
       or set pve_clone_targets explicitly.
 
 - name: Assert required global clone variables exist (safe checks)

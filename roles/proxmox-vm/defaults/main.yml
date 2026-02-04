@@ -20,7 +20,7 @@ pve_timeout: 300
 # === Don't touch! === #
 pve_node: "{{ inventory_hostname_short }}"
 pve_vmids: "{{ pve_vm_map[inventory_hostname_short] | default([]) }}"
-pve_clone_targets: "{{ groups['pve_vms_to_clone'] | default([]) }}"
+pve_clone_targets: "{{ groups['pve_vm_to_clone'] | default([]) }}"
 
 # ===== VM Clone ===== #
 # Clean enable/disable (do NOT comment vars out to "disable")
@@ -43,10 +43,10 @@ pve_create_enabled: false
 
 # List of hosts to create (can be overridden in playbook)
 # Example: ['elastic001.aaron.lan', 'elastic002.aaron.lan']
-pve_create_vms: []
+pve_create_vm: []
 
 # Fallback: inventory group containing VMs to create
-pve_create_targets: "{{ pve_create_vms if (pve_create_vms | length) > 0 else groups['pve_vms_to_create'] | default([]) }}"
+pve_create_targets: "{{ pve_create_vm if (pve_create_vm | length) > 0 else groups['pve_vm_to_create'] | default([]) }}"
 
 # Required when create enabled
 pve_create_vmid_start: 200

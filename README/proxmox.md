@@ -6,13 +6,13 @@
 ## Usage
 ```bash
 # Start VMs on all Proxmox hosts
-ansible-playbook playbooks/proxmox.yml --tags pve_state_vms
+ansible-playbook playbooks/proxmox.yml --tags pve_state_vm
 
 # Change state of VMs only on walnut
-ansible-playbook playbooks/proxmox.yml --tags pve_state_vms --limit walnut.aaron.lan
+ansible-playbook playbooks/proxmox.yml --tags pve_state_vm --limit walnut.aaron.lan
 
 # Test connectivity first, then change state of VMs
-ansible-playbook playbooks/proxmox.yml --tags pve_connectivity,pve_state_vms
+ansible-playbook playbooks/proxmox.yml --tags pve_connectivity,pve_state_vm
 ```
 
 ## How to Create a Token ID
@@ -93,8 +93,8 @@ Value (the secret):
 
 ## Tags
 - pve_connectivity
-- pve_state_vms
-- pve_clone_vms
+- pve_state_vm
+- pve_clone_vm
 
 ## Notes:
 For Proxmox connections; 

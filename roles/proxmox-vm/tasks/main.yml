@@ -3,7 +3,7 @@
   when: pve_vm_state is defined and pve_vm_state is not none
   ansible.builtin.include_tasks: vm_state.yml
   tags:
-    - pve_state_vms
+    - pve_state_vm
 
 - name: Create VMs from scratch
   when: (pve_create_enabled | default(false) | bool)
@@ -14,7 +14,7 @@
     - name: Create designated VMs
       ansible.builtin.include_tasks: vm_create.yml
   tags:
-    - pve_create_vms
+    - pve_create_vm
 
 # These are ultimately untested!
 #- name: Clone VMs
@@ -26,7 +26,7 @@
 #    - name: Clone designated VMs
 #      ansible.builtin.include_tasks: vm_clone_nontemplate.yml
 #  tags:
-#    - pve_clone_vms
+#    - pve_clone_vm
 #
 #- name: Clone VMs
 #  when: (pve_clone_enabled | default(true) | bool)
@@ -37,4 +37,4 @@
 #    - name: Clone designated VMs
 #      ansible.builtin.include_tasks: vm_clone_template.yml
 #  tags:
-#    - pve_clone_vms
+#    - pve_clone_vm

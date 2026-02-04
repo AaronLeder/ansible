@@ -17,8 +17,8 @@
     that:
       - (pve_create_targets_resolved | length) > 0
     fail_msg: >-
-      No create targets found. Set pve_create_vms list in playbook
-      or populate inventory group 'pve_vms_to_create'.
+      No create targets found. Set pve_create_vm list in playbook
+      or populate inventory group 'pve_vm_to_create'.
 
 - name: Assert required per-host inventory vars exist
   ansible.builtin.assert:

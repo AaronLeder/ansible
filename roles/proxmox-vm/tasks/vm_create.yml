@@ -16,7 +16,7 @@
 - name: Fail if any target VMID already exists
   ansible.builtin.assert:
     that:
-      - (item.proxmox_vms | default([]) | length) == 0
+      - (item.proxmox_vm | default([]) | length) == 0
     fail_msg: >-
       VMID {{ item.item.vmid }} for {{ item.item.host }} already exists in Proxmox.
       Choose a different pve_vmid or adjust pve_create_vmid_start.
@@ -92,7 +92,7 @@
     type: qemu
     vmid: "{{ item.vmid }}"
   register: wait_vm
-  until: (wait_vm.proxmox_vms | default([]) | length) == 1
+  until: (wait_vm.proxmox_vm | default([]) | length) == 1
   retries: 30
   delay: 5
   loop: "{{ pve_create_plan }}"

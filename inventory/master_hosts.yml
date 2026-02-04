@@ -38,7 +38,7 @@ all:
           ansible_host: 192.168.1.203
 
     # Only need to put the host here
-    pve_vms_to_clone:
+    pve_vm_to_clone:
       hosts:
         maint002.aaron.lan:
 
