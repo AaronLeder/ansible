@@ -10,7 +10,10 @@
 
 - name: Determine create targets list
   ansible.builtin.set_fact:
-    pve_create_targets_resolved: "{{ pve_create_targets }}"
+    # Support both variable names:
+    # - pve_create_targets (role-native)
+    # - pve_create_vm (used in some playbooks)
+    pve_create_targets_resolved: "{{ pve_create_targets | default(pve_create_vm | default([])) }}"
 
 - name: Assert create targets list is not empty
   ansible.builtin.assert:
@@ -28,12 +31,12 @@
     fail_msg: "{{ item }} must define ansible_host and pve_vmid in inventory"
   loop: "{{ pve_create_targets_resolved }}"
 
-- name: Assert required network vars exist (from inventory or group_vars)
+- name: Assert required network vars exist (from inventory or group_vars or playbook)
   ansible.builtin.assert:
     that:
-      - hostvars[item].pve_create_prefix is defined
-      - hostvars[item].pve_create_gateway is defined
-    fail_msg: "{{ item }} must have pve_create_prefix and pve_create_gateway defined (in inventory or group_vars)"
+      - (hostvars[item].pve_create_prefix is defined) or (pve_create_prefix is defined)
+      - (hostvars[item].pve_create_gateway is defined) or (pve_create_gateway is defined)
+    fail_msg: "{{ item }} must have pve_create_prefix and pve_create_gateway defined (in inventory, group_vars, or playbook vars)"
   loop: "{{ pve_create_targets_resolved }}"
 
 - name: Query Proxmox cluster nodes
@@ -44,7 +47,7 @@
     return_content: true
     status_code: [200]
     headers:
-      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+      Authorization: "PVEAPIToken={{ (pve_api_token_full_id | default(pve_api_user ~ '!' ~ pve_api_token_id)) }}={{ pve_api_token_secret }}"
   register: pve_nodes_resp
   changed_when: false
   no_log: true
@@ -115,6 +118,7 @@
             'scsi': (
               hostvars[item].pve_scsi
               | default({
+                # Proxmox uses iothread=1 (not "on") for per-disk IO threads.
                 'scsi0': (hostvars[item].pve_create_storage | default(pve_create_storage)) + ':' + ((hostvars[item].pve_disk_size | default(pve_create_disk_size)) | string) + ',iothread=1'
               })
             ),
@@ -128,11 +132,30 @@
                 'net0': 'virtio,bridge=' + (hostvars[item].pve_bridge | default(pve_create_bridge)) + ',tag=' + ((hostvars[item].pve_vlan | default(pve_create_vlan)) | string)
               })
             ),
+            # IMPORTANT:
+            # - ide2 is conventionally reserved for the cloud-init drive.
+            # - If you attach an ISO/CDROM, put it on ide0 when cloud-init is enabled
+            #   so ide2 remains available for cloud-init.
             'ide': (
               hostvars[item].pve_ide
-              | default((
-                {'ide2': (hostvars[item].pve_iso | default(pve_create_iso)) + ',media=cdrom'} if (hostvars[item].pve_iso | default(pve_create_iso)) != '' else {}
-              ))
+              | default(
+                (
+                  ({
+                    'ide2': (hostvars[item].pve_cloudinit_storage | default(pve_create_cloudinit_storage | default(pve_create_storage))) + ':cloudinit'
+                  } if (pve_create_use_cloudinit | default(false) | bool) else {})
+                  | combine(
+                    (
+                      {'ide0': (hostvars[item].pve_iso | default(pve_create_iso)) + ',media=cdrom'}
+                      if ((hostvars[item].pve_iso | default(pve_create_iso)) != '' and (pve_create_use_cloudinit | default(false) | bool))
+                      else (
+                        {'ide2': (hostvars[item].pve_iso | default(pve_create_iso)) + ',media=cdrom'}
+                        if ((hostvars[item].pve_iso | default(pve_create_iso)) != '')
+                        else {}
+                      )
+                    )
+                  )
+                )
+              )
             ),
             'agent': (
               hostvars[item].pve_agent
@@ -160,7 +183,7 @@
             'ipconfig': (
               hostvars[item].pve_ipconfig
               | default(
-                {'ipconfig0': 'ip=' + hostvars[item].ansible_host + '/' + (hostvars[item].pve_prefix | string) + ',gw=' + hostvars[item].pve_gateway}
+                {'ipconfig0': 'ip=' + hostvars[item].ansible_host + '/' + ((hostvars[item].pve_prefix | default(pve_create_prefix)) | string) + ',gw=' + (hostvars[item].pve_gateway | default(pve_create_gateway))}
               )
             ) if pve_create_use_cloudinit | default(false) | bool else {},
             'ciuser': (

@@ -12,29 +12,17 @@
       ansible.builtin.import_tasks: vm_create_preflight.yml
 
     - name: Create designated VMs
-      ansible.builtin.include_tasks: vm_create.yml
+      ansible.builtin.include_tasks: vm_create_bare_metal.yml
   tags:
     - pve_create_vm
 
-# These are ultimately untested!
-#- name: Clone VMs
-#  when: (pve_clone_enabled | default(true) | bool)
-#  block:
-#    - name: Preflight checks and clone plan
-#      ansible.builtin.import_tasks: vm_clone_preflight.yml
-#
-#    - name: Clone designated VMs
-#      ansible.builtin.include_tasks: vm_clone_nontemplate.yml
-#  tags:
-#    - pve_clone_vm
-#
-#- name: Clone VMs
-#  when: (pve_clone_enabled | default(true) | bool)
-#  block:
-#    - name: Preflight checks and clone plan
-#      ansible.builtin.import_tasks: vm_clone_preflight.yml
-#
-#    - name: Clone designated VMs
-#      ansible.builtin.include_tasks: vm_clone_template.yml
-#  tags:
-#    - pve_clone_vm
+- name: Clone VMs from template
+  when: (pve_clone_enabled | default(false) | bool)
+  block:
+    - name: Preflight checks and clone plan
+      ansible.builtin.import_tasks: vm_clone_preflight.yml
+
+    - name: Clone designated VMs
+      ansible.builtin.include_tasks: vm_clone_template.yml
+  tags:
+    - pve_clone_vm

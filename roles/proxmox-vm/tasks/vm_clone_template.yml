@@ -16,13 +16,13 @@
 - name: Fail if any target VMID already exists
   ansible.builtin.assert:
     that:
-      - (item.proxmox_vm | default([]) | length) == 0
+      - (item.proxmox_vms | default([]) | length) == 0
     fail_msg: >-
       VMID {{ item.item.vmid }} for {{ item.item.host }} already exists in Proxmox.
-      Choose a different pve_vmid or adjust pve_clone_vmid_start.
+      Choose a different pve_vmid or delete the existing VM.
   loop: "{{ vmid_info.results }}"
 
-- name: Clone from template to each target VM
+- name: Clone VMs from template
   community.proxmox.proxmox_kvm:
     api_host: "{{ pve_api_host }}"
     api_port: "{{ pve_api_port | default(8006) }}"
@@ -32,27 +32,305 @@
     api_password: "{{ pve_api_password | default(omit) }}"
     validate_certs: "{{ pve_validate_certs | default(false) }}"
 
-    # Source node (where the template lives)
-    node: "{{ pve_clone_source_node_resolved }}"
-    # Destination node (optional)
-    target: "{{ item.target_node if (item.target_node != pve_clone_source_node_resolved) else omit }}"
-
-    # Clone source: use resolved NAME; also pass vmid for clarity
-    clone: "{{ pve_clone_template_name_resolved }}"
-    vmid: "{{ pve_clone_template_id | int }}"
-
-    # New VM identity
+    node: "{{ item.target_node }}"
+    clone: "{{ pve_clone_template_name }}"
     newid: "{{ item.vmid }}"
     name: "{{ item.host }}"
-
-    # Clone options
-    full: "{{ pve_clone_full | default(true) }}"
-    storage: "{{ item.storage if (pve_clone_full | default(true) | bool) else omit }}"
-    format: "{{ item.format | default(omit) }}"
+    full: "{{ item.full }}"
+    storage: "{{ item.storage }}"
+    format: "{{ item.format }}"
     pool: "{{ item.pool if ((item.pool | default('') | string | length) > 0) else omit }}"
+
+    ipconfig: "{{ item.ipconfig if item.ipconfig is defined and item.ipconfig else omit }}"
+    ciuser: "{{ item.ciuser if ((item.ciuser | default('') | string | length) > 0) else omit }}"
+    cipassword: "{{ item.cipassword if ((item.cipassword | default('') | string | length) > 0) else omit }}"
+    sshkeys: "{{ item.sshkeys if ((item.sshkeys | default('') | string | length) > 0) else omit }}"
+
+    tags: "{{ item.tags if ((item.tags | default('') | string | length) > 0) else omit }}"
+
     timeout: "{{ pve_clone_timeout | default(900) }}"
   loop: "{{ pve_clone_plan }}"
+  register: clone_result
+  no_log: false
+# ------------------------------------------------------------
+# Post-clone: detect disks; if none exist, create/attach one
+# ------------------------------------------------------------
+- name: Read VM config for cloned VMs (post-clone)
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ item.target_node }}/qemu/{{ item.vmid }}/config"
+    method: GET
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ (pve_api_token_full_id | default(pve_api_user ~ '!' ~ pve_api_token_id)) }}={{ pve_api_token_secret }}"
+  loop: "{{ pve_clone_plan }}"
+  register: pve_clone_cfg
+  changed_when: false
+  no_log: false
+- name: Attach boot disk if cloned VM has no disk devices
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
 
+    node: "{{ item.item.target_node }}"
+    vmid: "{{ item.item.vmid }}"
+    scsihw: "{{ cfg.scsihw | default('virtio-scsi-single') }}"
+
+    scsi: "{{ disk_map if bus == 'scsi' else omit }}"
+    virtio: "{{ disk_map if bus == 'virtio' else omit }}"
+    sata: "{{ disk_map if bus == 'sata' else omit }}"
+    nvme: "{{ disk_map if bus == 'nvme' else omit }}"
+    ide: "{{ disk_map if bus == 'ide' else omit }}"
+
+    update: true
+    update_unsafe: true
+    state: present
+    timeout: "{{ pve_clone_timeout | default(900) }}"
+  vars:
+    cfg: "{{ item.json.data }}"
+
+    # Detect any existing disk-like devices (ignore cloud-init + cdrom)
+    scsi_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^scsi[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    virtio_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^virtio[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    sata_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^sata[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    nvme_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^nvme[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    ide_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^ide[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+
+    boot_disk: >-
+      {{
+        (
+          (scsi_keys | first) if (scsi_keys | length) > 0 else
+          ((virtio_keys | first) if (virtio_keys | length) > 0 else
+           ((sata_keys | first) if (sata_keys | length) > 0 else
+            ((nvme_keys | first) if (nvme_keys | length) > 0 else
+             ((ide_keys | first) if (ide_keys | length) > 0 else ''))))
+        )
+      }}
+
+    # If Proxmox config has "bootdisk" set (common), prefer that as the disk slot to create.
+    # Example from your failure: bootdisk='scsi0' but scsi0 key is missing => create scsi0.
+    desired_disk_key: >-
+      {{
+        (cfg.bootdisk | string)
+        if (
+          cfg.bootdisk is defined
+          and (cfg.bootdisk | string) is match('^(scsi|virtio|sata|nvme|ide)[0-9]+$')
+          and (cfg.bootdisk | string) != 'ide2'
+        )
+        else 'scsi0'
+      }}
+
+    bus: "{{ (desired_disk_key | regex_search('^(scsi|virtio|sata|nvme|ide)')) | default('scsi') }}"
+
+    disk_size_gb: "{{ pve_clone_disk_size | default(pve_create_disk_size | default(100)) }}"
+    disk_spec: >-
+      {{
+        item.item.storage ~ ':' ~ (disk_size_gb | string)
+        ~ (',format=' ~ item.item.format if ((item.item.format | default('') | string | length) > 0) else '')
+        ~ ',iothread=1'
+      }}
+    disk_map: "{{ { desired_disk_key: disk_spec } }}"
+  when: boot_disk == ''
+  loop: "{{ pve_clone_cfg.results }}"
+  no_log: false
+- name: Read VM config again after ensuring disks exist
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ item.target_node }}/qemu/{{ item.vmid }}/config"
+    method: GET
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ (pve_api_token_full_id | default(pve_api_user ~ '!' ~ pve_api_token_id)) }}={{ pve_api_token_secret }}"
+  loop: "{{ pve_clone_plan }}"
+  register: pve_clone_cfg2
+  changed_when: false
+  no_log: false
+- name: Fix boot order on cloned VMs to ensure the primary disk boots first (auto-detect bus)
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_port: "{{ pve_api_port | default(8006) }}"
+    api_user: "{{ pve_api_user }}"
+    api_token_id: "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password: "{{ pve_api_password | default(omit) }}"
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    node: "{{ item.item.target_node }}"
+    vmid: "{{ item.item.vmid }}"
+    boot: "{{ boot_order }}"
+    update: true
+    state: present
+  vars:
+    cfg: "{{ item.json.data }}"
+    scsi_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^scsi[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list | sort
+      }}
+    virtio_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^virtio[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list | sort
+      }}
+    sata_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^sata[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list | sort
+      }}
+    nvme_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^nvme[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list | sort
+      }}
+    ide_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^ide[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list | sort
+      }}
+    boot_disk: >-
+      {{
+        (scsi_keys[0] if (scsi_keys | length) > 0 else
+         (virtio_keys[0] if (virtio_keys | length) > 0 else
+          (sata_keys[0] if (sata_keys | length) > 0 else
+           (nvme_keys[0] if (nvme_keys | length) > 0 else
+            (ide_keys[0] if (ide_keys | length) > 0 else '')))))
+      }}
+    cloudinit_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('value','search','cloudinit')
+        | map(attribute='key') | list | sort
+      }}
+    cloudinit_dev: "{{ cloudinit_keys[0] if (cloudinit_keys | length) > 0 else '' }}"
+    boot_order: >-
+      {{
+        'order='
+        + boot_disk
+        + (';' + cloudinit_dev if cloudinit_dev != '' else '')
+        + (';net0' if (cfg.net0 is defined) else '')
+      }}
+  loop: "{{ pve_clone_cfg2.results }}"
+  register: boot_fix_result
+  no_log: false
+- name: Verify cloned VMs have a bootable disk device after fixes
+  ansible.builtin.assert:
+    that:
+      - boot_disk != ''
+      - (item.json.data.boot is defined) and ('order=' in (item.json.data.boot | string))
+    fail_msg: >-
+      VMID {{ item.item.vmid }} on node {{ item.item.target_node }} still has no bootable disk device or boot order.
+      Present config keys: {{ (cfg.keys() | list) | sort }}; boot={{ cfg.boot | default('') }}
+  vars:
+    cfg: "{{ item.json.data }}"
+    scsi_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^scsi[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    virtio_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^virtio[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    sata_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^sata[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    nvme_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^nvme[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    ide_keys: >-
+      {{
+        cfg | dict2items
+        | selectattr('key','match','^ide[0-9]+$')
+        | rejectattr('value','search','cloudinit')
+        | rejectattr('value','search','media=cdrom')
+        | map(attribute='key') | list
+      }}
+    boot_disk: >-
+      {{
+        (
+          (scsi_keys | first) if (scsi_keys | length) > 0 else
+          ((virtio_keys | first) if (virtio_keys | length) > 0 else
+           ((sata_keys | first) if (sata_keys | length) > 0 else
+            ((nvme_keys | first) if (nvme_keys | length) > 0 else
+             ((ide_keys | first) if (ide_keys | length) > 0 else ''))))
+        )
+      }}
+  loop: "{{ pve_clone_cfg2.results }}"
+  changed_when: false
+  no_log: false
 - name: Wait until cloned VMs appear in Proxmox inventory
   community.proxmox.proxmox_vm_info:
     api_host: "{{ pve_api_host }}"
@@ -64,29 +342,13 @@
     type: qemu
     vmid: "{{ item.vmid }}"
   register: wait_vm
-  until: (wait_vm.proxmox_vm | default([]) | length) == 1
+  until: (wait_vm.proxmox_vms | default([]) | length) == 1
   retries: 30
   delay: 5
   loop: "{{ pve_clone_plan }}"
   changed_when: false
 
-- name: Apply hostname + static IP via cloud-init (from inventory vars)
-  community.proxmox.proxmox_kvm:
-    api_host: "{{ pve_api_host }}"
-    api_port: "{{ pve_api_port | default(8006) }}"
-    api_user: "{{ pve_api_user }}"
-    api_token_id: "{{ pve_api_token_id }}"
-    api_token_secret: "{{ pve_api_token_secret }}"
-    validate_certs: "{{ pve_validate_certs | default(false) }}"
-    node: "{{ item.target_node }}"
-    vmid: "{{ item.vmid }}"
-    name: "{{ item.host }}"
-    ipconfig:
-      ipconfig0: "ip={{ hostvars[item.host].ansible_host }}/{{ hostvars[item.host].pve_prefix }},gw={{ hostvars[item.host].pve_gateway }}"
-    update: true
-  loop: "{{ pve_clone_plan }}"
-
-- name: Start cloned VMs
+- name: Start cloned VMs (if configured to auto-start)
   community.proxmox.proxmox_kvm:
     api_host: "{{ pve_api_host }}"
     api_port: "{{ pve_api_port | default(8006) }}"
@@ -99,3 +361,4 @@
     state: started
     timeout: "{{ pve_timeout | default(300) }}"
   loop: "{{ pve_clone_plan }}"
+  when: item.autostart | default(false) | bool

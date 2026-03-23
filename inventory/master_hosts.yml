@@ -37,10 +37,12 @@ all:
         squeak.aaron.lan: 
           ansible_host: 192.168.1.203
 
-    # Only need to put the host here
+    # ===== VMs TO CLONE ===== #
+    # Add hosts here that you want to clone with default settings
+    # Or target specific groups (elastic, kibana, logstash, infra, dev)
     pve_vm_to_clone:
       hosts:
-        maint002.aaron.lan:
+        elastic001.aaron.lan:
 
     # ===== Infra ===== #
     infra:
@@ -71,16 +73,19 @@ all:
       hosts:
         logstash001.aaron.lan:
           ansible_host: 192.168.30.50
+          pve_vmid: 350
 
     kibana:
       hosts:
         kibana001.aaron.lan:
           ansible_host: 192.168.30.60
+          pve_vmid: 360
 
     fleet:
       hosts:
         kibana001.aaron.lan:
           ansible_host: 192.168.30.60
+          pve_vmid: 360
 
     elasticsearch:
       children:
@@ -94,11 +99,16 @@ all:
       hosts: 
         ubuntu001.dev.pve:
           ansible_host: 192.168.35.11
+          pve_vmid: 511
         ubuntu002.dev.pve:
           ansible_host: 192.168.35.12
+          pve_vmid: 512
         ubuntu003.dev.pve:
           ansible_host: 192.168.35.13
+          pve_vmid: 513
         ubuntu004.dev.pve:
           ansible_host: 192.168.35.14
+          pve_vmid: 514
         ubuntu005.dev.pve:
           ansible_host: 192.168.35.15
+          pve_vmid: 515

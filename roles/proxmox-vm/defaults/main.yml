@@ -24,14 +24,15 @@ pve_clone_targets: "{{ groups['pve_vm_to_clone'] | default([]) }}"
 
 # ===== VM Clone ===== #
 # Clean enable/disable (do NOT comment vars out to "disable")
-pve_clone_enabled: true
+pve_clone_enabled: false
 
 # Required when clone enabled
-pve_clone_template_id: 100
+pve_clone_template_id: 9000
+pve_clone_template_name: "elastic-ubuntu-cloudinit"
 pve_clone_vmid_start: 100
 
 # Optional (may be overridden per-host)
-pve_clone_storage: local-lvm
+pve_clone_storage: mydata
 pve_clone_format: qcow2
 pve_clone_pool: ""
 pve_clone_full: true
