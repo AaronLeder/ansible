@@ -1,0 +1,199 @@
+---
+# =============================================================================
+# roles/proxmox_vm/defaults/main.yml
+#
+# Role defaults — lowest priority in Ansible's variable resolution.
+#
+# Override priority (highest → lowest):
+#   extra-vars (-e)
+#     └── host_vars/<host>.yml          ← per-VM overrides
+#           └── group_vars/<group>/main.yml  ← app-group defaults
+#                 └── group_vars/all/main.yml     ← global API + vault wiring
+#                       └── here                       ← safe fallbacks only
+#
+# Storage layout (walnut):
+#   local     — ISO images and snippets (dir, 937 GiB)
+#   mydata    — VM disks and cloud images (zfspool, 1.8 TiB)
+#   local-zfs — available but not used by this role
+#
+# Network vars (pve_create_bridge, pve_create_vlan, pve_create_prefix,
+# pve_create_gateway) are intentionally NOT set here. They differ per
+# application group and must be defined in group_vars/<group>/main.yml
+# or host_vars/<host>.yml. The preflight tasks will assert their presence.
+# =============================================================================
+
+
+# =============================================================================
+# ===== Proxmox API ===========================================================
+# =============================================================================
+
+pve_api_host: "walnut"
+pve_api_port: 8006
+pve_api_user: "ansible@pve"
+
+# Token name — used by community.proxmox modules
+pve_api_token_name:    "ansible-maint001"
+pve_api_token_id:      "{{ pve_api_token_name }}"
+
+# Full "user@realm!tokenname" — used in raw REST Authorization headers
+pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
+
+# pve_api_token_secret — vault only, never set here
+pve_validate_certs: false
+pve_timeout: 300
+
+
+# =============================================================================
+# ===== Internal Computed Vars (do not override) ==============================
+# =============================================================================
+
+# Short hostname of the current Proxmox node (resolved from inventory)
+pve_node: "{{ inventory_hostname_short }}"
+
+# VMIDs for the current node — populated from pve_vm_map in state playbooks
+pve_vmids: "{{ pve_vm_map[inventory_hostname_short] | default([]) }}"
+
+
+# =============================================================================
+# ===== VM State ==============================================================
+# =============================================================================
+
+# pve_vm_state — define in playbook or extra-vars; leave undefined to skip.
+#   Valid values: started | stopped | restarted | suspended | absent
+
+# pve_vm_map — define per-playbook run, e.g.:
+#   -e '{"pve_vm_map": {"walnut": [301, 302]}}'
+#   Never set a default here — an accidental match would affect wrong VMIDs.
+
+
+# =============================================================================
+# ===== VM Clone ==============================================================
+# =============================================================================
+
+pve_clone_enabled: false       # Must be explicitly set true to run clone workflow
+
+# Template to clone from — override per group_vars to support multiple templates.
+# See group_vars/elastic/main.yml for an example.
+pve_clone_template_id:   9000
+pve_clone_template_name: "ubuntu-cloudinit"
+
+# Storage: VM disks go on mydata (zfspool)
+pve_clone_storage:  "mydata"
+pve_clone_format:   "qcow2"   # Clone hint for file-based storage; do not force on zfspool fallback disk attach
+pve_clone_pool:     ""
+pve_clone_full:     true       # true = full clone (independent), false = linked clone (shared base)
+pve_clone_timeout:  900        # seconds — full clones of large disks can take time
+
+# Fallback disk size — only used when a clone has no disk after cloning
+# (edge case on some PVE versions). Normal clones inherit the template disk.
+pve_clone_disk_size: 100       # GB
+
+# Target node — where clones are created (defaults to pve_api_host)
+pve_clone_target_node: "{{ pve_api_host }}"
+
+# Clone target list — resolved from inventory group by default.
+# Override with extra-vars to target a specific group:
+#   -e '{"pve_clone_targets": "{{ groups[\"elastic\"] }}"}'
+pve_clone_targets: "{{ groups['pve_vm_to_clone'] | default([]) }}"
+
+
+# =============================================================================
+# ===== VM Create from Scratch ================================================
+# =============================================================================
+
+pve_create_enabled: false      # Must be explicitly set true to run create workflow
+
+# List of FQDNs to create — falls back to inventory group 'pve_vm_to_create'
+pve_create_vm: []
+
+# Target node for VM creation (defaults to pve_api_host)
+pve_create_target_node: "{{ pve_api_host }}"
+
+# ----- Hardware -----
+pve_create_cores:   2
+pve_create_sockets: 1
+pve_create_memory:  8192       # MB — intentionally high; override per group_vars if needed
+pve_create_cpu:     "host"     # Pass-through host CPU flags for best performance
+
+# ----- BIOS / Machine -----
+pve_create_bios:    "seabios"  # Alternative: "ovmf" for UEFI (required for Secure Boot)
+pve_create_machine: "q35"      # Recommended for modern Linux; i440fx is legacy
+pve_create_boot:    "order=scsi0;ide2;net0"
+pve_create_ostype:  "l26"      # l26 = Linux 2.6+ kernel; also: win10, win11, l24
+
+# ----- Storage -----
+# VM disks → mydata (zfspool, 1.8 TiB)
+pve_create_storage:   "mydata"
+pve_create_disk_size: 100      # GB — integer only, no 'G' suffix
+pve_create_scsihw:    "virtio-scsi-single"  # Recommended for Linux; supports iothread per disk
+
+# Cloud-init drive storage — same pool as VM disks
+pve_create_cloudinit_storage: "mydata"
+
+# ----- Network -----
+# NOT set here — must be defined in group_vars/<group>/main.yml or host_vars.
+# Required vars: pve_create_bridge, pve_create_vlan, pve_create_prefix, pve_create_gateway
+# The preflight will assert these are present before building the create plan.
+
+# ----- ISO / CDROM -----
+# ISO images live on 'local' storage (dir, 870 GiB free).
+# Leave empty when using cloud-init templates (the normal path).
+# Example: "local:iso/ubuntu-24.04.2-live-server-amd64.iso"
+pve_create_iso: ""
+
+# ----- Misc Options -----
+pve_create_agent:      "enabled=1"   # QEMU guest agent — enables shutdown/IP detection from Proxmox UI
+pve_create_onboot:     false         # Start VM automatically when the Proxmox host boots
+pve_create_protection: false         # Lock VM against accidental deletion in Proxmox UI
+pve_create_tags:       ""            # Comma-separated tags shown in Proxmox UI (e.g. "elastic,prod")
+pve_create_pool:       ""            # Proxmox resource pool for permission delegation
+pve_create_autostart:  false         # Start VM immediately after Ansible creates it
+pve_create_timeout:    300           # Seconds to wait for VM creation API call to complete
+
+
+# =============================================================================
+# ===== Cloud-Init ============================================================
+# =============================================================================
+
+pve_create_use_cloudinit: false      # Set true to inject cloud-init config on create/clone
+
+pve_create_ciuser:     ""            # Linux user created at first boot
+pve_create_cipassword: ""            # Password for ciuser — sourced from vault via group_vars/all
+pve_create_sshkeys:    ""            # URL-encoded SSH public key(s) injected at first boot
+
+
+# =============================================================================
+# ===== Template Bootstrap ====================================================
+#
+# Configures vm_build_template.yml, which runs automatically from
+# vm_clone_preflight.yml when pve_clone_template_id is not found in Proxmox.
+#
+# To support multiple templates (elastic, kibana, logstash, etc.), override
+# these vars in the relevant group_vars/<group>/main.yml:
+#
+#   pve_clone_template_id:   9001
+#   pve_clone_template_name: "kibana-ubuntu-cloudinit"
+#   pve_template_image_url:  "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+#
+# All templates use the same base Ubuntu cloud image by default. Override
+# pve_template_image_url per group if different distros are needed.
+# =============================================================================
+
+# Cloud image source — Ubuntu 24.04 LTS (Noble Numbat), updated daily
+pve_template_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+
+# Filename on disk — defaults to basename of URL. Override if needed.
+# pve_template_image_filename: "noble-server-cloudimg-amd64.img"
+
+# Staging directory on the Proxmox node (uses 'local' dir storage)
+# Image is staged here during qm importdisk, then moves to mydata.
+pve_template_image_dir: "/var/lib/vz/template/iso"
+
+# Template VM hardware — intentionally minimal.
+# Clones get their real resources from group_vars (pve_cores, pve_memory, etc.)
+pve_template_cores:  2
+pve_template_memory: 8192      # MB
+
+# Template base disk size — clones inherit this, then grow via pve_disk_size.
+# Must be >= uncompressed cloud image size (Ubuntu Noble ≈ 3.5 GB raw).
+pve_template_disk_size: "100G"

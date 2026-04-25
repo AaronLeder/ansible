@@ -1,0 +1,276 @@
+---
+# =============================================================================
+# vm_build_template.yml
+#
+# Bootstraps a Proxmox cloud-init template when one does not already exist.
+# Included conditionally from vm_clone_preflight.yml — never run directly.
+#
+# What this does:
+#   1. Resolves image filename and path from pve_template_image_url
+#   2. Checks if the cloud image is already staged on the node
+#   3. Downloads the cloud image to pve_template_image_dir if not present
+#      (staged on 'local' storage — dir, no size limit for imports)
+#   4. Creates a blank QEMU VM with pve_clone_template_id
+#   5. Imports the disk image into 'mydata' (zfspool — VM disk storage)
+#   6. Attaches scsi0 + ide2 (cloud-init drive), sets boot order
+#   7. Resizes disk to pve_template_disk_size
+#   8. Converts the VM to a template (irreversible)
+#   9. Waits for and verifies the template appears in Proxmox inventory
+#
+# Consumed vars (all defaulted in roles/proxmox_vm/defaults/main.yml,
+# overrideable per group_vars/<group>/main.yml for multiple templates):
+#   pve_template_image_url      — cloud image download URL
+#   pve_template_image_filename — filename on disk (derived from URL)
+#   pve_template_image_dir      — staging dir on PVE node (local storage)
+#   pve_clone_template_id       — VMID to create (e.g. 9000)
+#   pve_clone_template_name     — VM name (e.g. "elastic-ubuntu-cloudinit")
+#   pve_clone_storage           — VM disk storage pool (mydata)
+#   pve_template_cores          — CPU cores for template VM
+#   pve_template_memory         — RAM in MB for template VM
+#   pve_template_disk_size      — disk size after resize (e.g. "100G")
+#   pve_create_bridge           — network bridge (from group_vars)
+#   pve_create_vlan             — VLAN tag (from group_vars)
+# =============================================================================
+
+# ----- Resolve filename and path from URL ------------------------------------
+
+- name: Template Bootstrap | Resolve image filename from URL
+  ansible.builtin.set_fact:
+    _pve_template_image_filename: >-
+      {{ pve_template_image_filename | default(pve_template_image_url | basename) }}
+
+- name: Template Bootstrap | Resolve full image staging path on node
+  ansible.builtin.set_fact:
+    _pve_template_image_path: >-
+      {{ (pve_template_image_dir | default('/var/lib/vz/template/iso')) + '/' + _pve_template_image_filename }}
+
+# ----- Announce intent -------------------------------------------------------
+
+- name: Template Bootstrap | Announce bootstrap
+  ansible.builtin.debug:
+    msg: >-
+      Template VMID {{ pve_clone_template_id }} ('{{ pve_clone_template_name }}')
+      not found on node '{{ _pve_clone_default_node }}'.
+      Bootstrapping from {{ pve_template_image_url }}.
+      Staging image to local storage, importing disk to mydata.
+
+# ----- Guard: VMID must not already exist as a non-template VM ---------------
+
+- name: Template Bootstrap | Check VMID is completely free
+  community.proxmox.proxmox_vm_info:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ pve_clone_template_id }}"
+  register: _template_vmid_check
+
+- name: Template Bootstrap | Fail if VMID is taken by a non-template VM
+  ansible.builtin.assert:
+    that:
+      - (_template_vmid_check.proxmox_vms | default([]) | length) == 0
+    fail_msg: >-
+      VMID {{ pve_clone_template_id }} already exists but is NOT a template.
+      Delete it first or change pve_clone_template_id to a free VMID.
+
+# ----- Stage cloud image onto the Proxmox node -------------------------------
+# The Proxmox API /nodes/{node}/execute endpoint runs a shell command on the
+# node — no SSH access needed. Image is staged in local (dir storage) which
+# acts as a temporary landing zone before qm importdisk moves it to mydata.
+
+- name: Template Bootstrap | Check if cloud image already staged on node
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ _pve_clone_default_node }}/execute"
+    method: POST
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+    body_format: json
+    body:
+      command: "test -f {{ _pve_template_image_path }} && echo exists || echo missing"
+  register: _image_exists_check
+  changed_when: false
+  no_log: true
+
+- name: Template Bootstrap | Set image presence fact
+  ansible.builtin.set_fact:
+    _pve_image_present: "{{ 'exists' in (_image_exists_check.json.data | default('missing')) }}"
+
+- name: Template Bootstrap | Download cloud image to node staging dir
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ _pve_clone_default_node }}/execute"
+    method: POST
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+    body_format: json
+    body:
+      command: "wget -q -O {{ _pve_template_image_path }} {{ pve_template_image_url }}"
+  register: _image_download
+  when: not _pve_image_present
+  failed_when: _image_download.status != 200
+
+- name: Template Bootstrap | Confirm image file is present after download
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ _pve_clone_default_node }}/execute"
+    method: POST
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+    body_format: json
+    body:
+      command: "test -f {{ _pve_template_image_path }} && echo exists || echo missing"
+  register: _image_confirm
+  changed_when: false
+  no_log: true
+
+- name: Template Bootstrap | Assert image is present before proceeding
+  ansible.builtin.assert:
+    that:
+      - "'exists' in (_image_confirm.json.data | default('missing'))"
+    fail_msg: >-
+      Cloud image not found at {{ _pve_template_image_path }} after download.
+      Check pve_template_image_url and that {{ _pve_clone_default_node }}
+      has outbound internet access.
+
+# ----- Create the template VM ------------------------------------------------
+
+- name: Template Bootstrap | Create blank template VM
+  community.proxmox.proxmox_kvm:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    node:    "{{ _pve_clone_default_node }}"
+    vmid:    "{{ pve_clone_template_id }}"
+    name:    "{{ pve_clone_template_name }}"
+    cores:   "{{ pve_template_cores   | default(2) }}"
+    sockets: 1
+    memory:  "{{ pve_template_memory  | default(8192) }}"
+    cpu:     "host"
+    machine: "q35"
+    bios:    "seabios"
+    ostype:  "l26"
+    scsihw:  "virtio-scsi-single"
+    net:
+      net0: "virtio,bridge={{ pve_create_bridge }},tag={{ pve_create_vlan }}"
+    agent:   "enabled=1"
+    onboot:  false
+    state:   present
+    timeout: "{{ pve_create_timeout | default(300) }}"
+
+# ----- Import disk image into mydata -----------------------------------------
+# qm importdisk moves the staged image from local into mydata (zfspool).
+# mydata is the correct target for all VM disks in this environment.
+
+- name: Template Bootstrap | Import cloud image disk into mydata
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ _pve_clone_default_node }}/execute"
+    method: POST
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+    body_format: json
+    body:
+      command: >-
+        qm importdisk {{ pve_clone_template_id }}
+        {{ _pve_template_image_path }}
+        {{ pve_clone_storage }}
+  register: _disk_import
+  failed_when: _disk_import.status != 200
+
+# ----- Attach disk and cloud-init drive, set boot order ---------------------
+# scsi0 — boot disk (imported cloud image, now in mydata)
+# ide2  — cloud-init drive (convention; kept free in all VM configs)
+
+- name: Template Bootstrap | Attach scsi0 and ide2 (cloud-init), set boot order
+  community.proxmox.proxmox_kvm:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    node:   "{{ _pve_clone_default_node }}"
+    vmid:   "{{ pve_clone_template_id }}"
+    scsi:
+      scsi0: "{{ pve_clone_storage }}:vm-{{ pve_clone_template_id }}-disk-0,iothread=1"
+    ide:
+      ide2:  "{{ pve_clone_storage }}:cloudinit"
+    boot:    "order=scsi0"
+    update:  true
+    state:   present
+    timeout: "{{ pve_create_timeout | default(300) }}"
+
+# ----- Resize disk -----------------------------------------------------------
+
+- name: Template Bootstrap | Resize template disk to {{ pve_template_disk_size }}
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ _pve_clone_default_node }}/qemu/{{ pve_clone_template_id }}/resize"
+    method: PUT
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+    body_format: form-urlencoded
+    body:
+      disk: scsi0
+      size: "{{ pve_template_disk_size | default('100G') }}"
+  register: _disk_resize
+  failed_when: _disk_resize.status != 200
+
+# ----- Convert to template ---------------------------------------------------
+
+- name: Template Bootstrap | Convert VM to template (irreversible)
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ _pve_clone_default_node }}/qemu/{{ pve_clone_template_id }}/template"
+    method: POST
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+  register: _template_convert
+  failed_when: _template_convert.status != 200
+
+# ----- Wait and verify -------------------------------------------------------
+
+- name: Template Bootstrap | Wait for template to appear in Proxmox inventory
+  community.proxmox.proxmox_vm_info:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ pve_clone_template_id }}"
+  register: _template_wait
+  until:
+    - (_template_wait.proxmox_vms | default([]) | length) == 1
+    - _template_wait.proxmox_vms[0].template | bool
+  retries: 20
+  delay: 5
+  changed_when: false
+
+- name: Template Bootstrap | Confirm template is ready
+  ansible.builtin.debug:
+    msg: >-
+      Template '{{ pve_clone_template_name }}' (VMID {{ pve_clone_template_id }})
+      built successfully on '{{ _pve_clone_default_node }}'.
+      Disk imported to mydata, sized to {{ pve_template_disk_size }}.
+      Clone workflow will now proceed.

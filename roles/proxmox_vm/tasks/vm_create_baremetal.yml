@@ -1,6 +1,6 @@
 ---
 # =============================================================================
-# vm_create_baremetl.yml
+# vm_create_baremetal.yml
 #
 # Creates new QEMU VMs from scratch using the pre-validated pve_create_plan.
 # Attaches a cloud-init drive (ide2) when pve_create_use_cloudinit is true.

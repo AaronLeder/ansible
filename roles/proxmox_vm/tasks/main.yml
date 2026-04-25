@@ -35,7 +35,7 @@
       ansible.builtin.import_tasks: vm_create_preflight.yml
 
     - name: Execute bare-metal VM creation
-      ansible.builtin.include_tasks: vm_create_baremetl.yml
+      ansible.builtin.include_tasks: vm_create_baremetal.yml
   tags:
     - pve_create_vm
 

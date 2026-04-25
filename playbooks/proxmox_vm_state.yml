@@ -21,7 +21,7 @@
   gather_facts: false
 
   vars_files:
-    - ../vault/aaron-homelab.yml
+    - ../vault/aaron_homelab.yml
 
   pre_tasks:
     - name: Pre-flight | Validate pve_vm_state is defined and not null

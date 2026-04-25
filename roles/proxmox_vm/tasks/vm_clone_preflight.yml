@@ -2,9 +2,15 @@
 # =============================================================================
 # vm_clone_preflight.yml
 #
-# Validates all inputs, queries the cluster, verifies the template exists,
-# and builds pve_clone_plan — a list of dicts that vm_clone_template.yml
+# Validates all inputs, queries the cluster, verifies or builds the template,
+# and constructs pve_clone_plan — a list of dicts that vm_clone_template.yml
 # iterates over.
+#
+# Template handling:
+#   - If the template VMID exists and is flagged as a template → proceed.
+#   - If the template VMID does not exist → include_tasks vm_build_template.yml
+#     to bootstrap it automatically, then proceed.
+#   - If the VMID exists but is NOT a template → hard fail (safety guard).
 # =============================================================================
 
 - name: Clone Preflight | Guard — skip when disabled
@@ -88,9 +94,9 @@
       Default clone target node '{{ _pve_clone_default_node }}' not found in
       cluster nodes {{ _pve_cluster_nodes }}.
 
-# ----- Template verification -------------------------------------------------
+# ----- Template check — bootstrap if missing ---------------------------------
 
-- name: Clone Preflight | Verify template VMID exists and is a template
+- name: Clone Preflight | Check whether template VMID exists
   community.proxmox.proxmox_vm_info:
     api_host:         "{{ pve_api_host }}"
     api_port:         "{{ pve_api_port | default(8006) }}"
@@ -102,14 +108,27 @@
     vmid: "{{ pve_clone_template_id }}"
   register: _template_info
 
-- name: Clone Preflight | Assert template exists and is flagged as template
+- name: Clone Preflight | Categorise template state
+  ansible.builtin.set_fact:
+    _template_exists:      "{{ (_template_info.proxmox_vms | default([]) | length) == 1 }}"
+    _template_is_template: "{{ (_template_info.proxmox_vms | default([]) | length) == 1 and _template_info.proxmox_vms[0].template | bool }}"
+
+# Hard fail: VMID is taken by a regular (non-template) VM — we cannot safely
+# replace it, and cloning from it would produce unpredictable results.
+- name: Clone Preflight | Fail if VMID is taken by a non-template VM
   ansible.builtin.assert:
     that:
-      - (_template_info.proxmox_vms | length) == 1
-      - _template_info.proxmox_vms[0].template | bool
+      - not (_template_exists and not _template_is_template)
     fail_msg: >-
-      VMID {{ pve_clone_template_id }} does not exist or is not marked as a
-      template in Proxmox. Verify pve_clone_template_id is correct.
+      VMID {{ pve_clone_template_id }} already exists on the cluster but is NOT
+      flagged as a template. Cloning from it is unsafe. Either convert it to a
+      template manually ('qm template {{ pve_clone_template_id }}' on the node),
+      or set pve_clone_template_id to a different VMID.
+
+# Bootstrap: VMID does not exist at all — build the template automatically.
+- name: Clone Preflight | Bootstrap template (not found — building now)
+  ansible.builtin.include_tasks: vm_build_template.yml
+  when: not _template_exists
 
 # ----- Build clone plan ------------------------------------------------------
 

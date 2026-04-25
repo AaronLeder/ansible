@@ -34,7 +34,7 @@
     pve_clone_enabled: false
 
   vars_files:
-    - ../vault/aaron-homelab.yml
+    - ../vault/aaron_homelab.yml
 
   pre_tasks:
     - name: Pre-flight | Assert clone workflow is explicitly enabled
@@ -52,7 +52,7 @@
           - pve_api_token_secret is defined
           - pve_api_token_secret | length > 0
         fail_msg: >-
-          pve_api_token_secret is not set. Ensure vault/aaron-homelab.yml
+          pve_api_token_secret is not set. Ensure vault/aaron_homelab.yml
           is decrypted and loaded correctly.
       tags: [pve_clone_vm, always]
 

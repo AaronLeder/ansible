@@ -1,11 +1,11 @@
 ---
 # =============================================================================
-# vault/aaron-homelab.yml  (ansible-vault encrypted)
+# vault/aaron_homelab.yml  (ansible-vault encrypted)
 #
 # All secrets for the aaron-homelab environment.
-# Encrypt with: ansible-vault encrypt vault/aaron-homelab.yml
-# Edit with:    ansible-vault edit vault/aaron-homelab.yml
-# View with:    ansible-vault view vault/aaron-homelab.yml
+# Encrypt with: ansible-vault encrypt vault/aaron_homelab.yml
+# Edit with:    ansible-vault edit vault/aaron_homelab.yml
+# View with:    ansible-vault view vault/aaron_homelab.yml
 #
 # CHANGES from previous version:
 #   + pve_create_cipassword removed as a separate var — it now resolves

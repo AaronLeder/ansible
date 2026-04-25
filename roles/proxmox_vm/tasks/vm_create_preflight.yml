@@ -3,7 +3,7 @@
 # vm_create_preflight.yml
 #
 # Validates all inputs, queries the Proxmox cluster, and builds pve_create_plan
-# — a list of dicts that vm_create_baremetl.yml iterates over.
+# — a list of dicts that vm_create_baremetal.yml iterates over.
 #
 # Each entry in pve_create_plan contains every parameter needed to create
 # one VM, resolved from (in priority order):

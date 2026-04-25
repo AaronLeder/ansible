@@ -29,14 +29,47 @@
   loop: "{{ pve_clone_plan }}"
   register: _vmid_check
 
-- name: Clone | Fail if any target VMID already exists
+- name: Clone | Classify existing VMIDs as matching or conflicting
+  ansible.builtin.set_fact:
+    _pve_clone_existing_ok: "{{ (_pve_clone_existing_ok | default([])) + [item.item] }}"
+  loop: "{{ _vmid_check.results }}"
+  when:
+    - (item.proxmox_vms | default([]) | length) > 0
+    - (item.proxmox_vms[0].name | default('')) == item.item.host
+    - (item.proxmox_vms[0].node | default('')) == item.item.target_node
+
+- name: Clone | Fail on VMID collisions that point at a different VM
   ansible.builtin.assert:
     that:
       - (item.proxmox_vms | default([]) | length) == 0
+        or (
+          (item.proxmox_vms[0].name | default('')) == item.item.host
+          and (item.proxmox_vms[0].node | default('')) == item.item.target_node
+        )
     fail_msg: >-
-      VMID {{ item.item.vmid }} for '{{ item.item.host }}' already exists.
-      Choose a different pve_vmid or delete the existing VM first.
+      VMID {{ item.item.vmid }} is already in use by
+      '{{ item.proxmox_vms[0].name | default('unknown') }}' on
+      '{{ item.proxmox_vms[0].node | default('unknown') }}', not the requested
+      '{{ item.item.host }}' on '{{ item.item.target_node }}'.
+      Choose a different pve_vmid or delete the conflicting VM first.
   loop: "{{ _vmid_check.results }}"
+
+- name: Clone | Build list of VMs that still need cloning
+  ansible.builtin.set_fact:
+    _pve_clone_pending: >-
+      {{
+        pve_clone_plan
+        | rejectattr('vmid', 'in', (_pve_clone_existing_ok | default([])) | map(attribute='vmid') | list)
+        | list
+      }}
+
+- name: Clone | Report VMs already present and reused
+  ansible.builtin.debug:
+    msg: >-
+      VMID {{ item.vmid }} ('{{ item.host }}') already exists on
+      '{{ item.target_node }}'; skipping clone and continuing.
+  loop: "{{ _pve_clone_existing_ok | default([]) }}"
+  changed_when: false
 
 # ----- Clone -----------------------------------------------------------------
 
@@ -66,7 +99,7 @@
 
     tags:    "{{ item.tags if ((item.tags | default('') | string | length) > 0) else omit }}"
     timeout: "{{ pve_clone_timeout | default(900) }}"
-  loop: "{{ pve_clone_plan }}"
+  loop: "{{ _pve_clone_pending | default([]) }}"
   register: _clone_result
 
 # ----- Post-clone: detect and attach missing boot disk -----------------------
@@ -138,7 +171,6 @@
     _disk_spec: >-
       {{
         item.item.storage ~ ':' ~ (_disk_size_gb | string)
-        ~ (',format=' ~ item.item.format if ((item.item.format | default('') | length) > 0) else '')
         ~ ',iothread=1'
       }}
     _disk_map: "{{ { _desired_disk_key: _disk_spec } }}"
@@ -205,12 +237,21 @@
   ansible.builtin.assert:
     that:
       - _boot_disk != ''
-      - (_cfg.boot is defined) and ('order=' in (_cfg.boot | string))
+      - >-
+        (_cfg.boot is defined) and (
+          ('order=' in (_cfg.boot | string))
+          or (
+            (_cfg.boot | string) == 'c'
+            and (_cfg.bootdisk | default('') | string) == _boot_disk
+          )
+        )
     fail_msg: >-
       VMID {{ item.item.vmid }} on {{ item.item.target_node }} still has no
       bootable disk or boot order after all fix attempts.
       Config keys: {{ (_cfg.keys() | list) | sort }};
-      boot={{ _cfg.boot | default('missing') }}
+      boot={{ _cfg.boot | default('missing') }};
+      bootdisk={{ _cfg.bootdisk | default('missing') }};
+      detected_boot_disk={{ _boot_disk }}
   vars:
     _cfg: "{{ item.json.data }}"
     _scsi_disks:  "{{ _cfg | dict2items | selectattr('key','match','^scsi[0-9]+$')  | rejectattr('value','search','cloudinit') | rejectattr('value','search','media=cdrom') | map(attribute='key') | list }}"
