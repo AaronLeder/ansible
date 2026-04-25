@@ -1,8 +1,0 @@
----
-- name: Install HAProxy
-  hosts: haproxy
-  roles:
-    - haproxy
-  tags:
-    - haproxy
-  gather_facts: false
