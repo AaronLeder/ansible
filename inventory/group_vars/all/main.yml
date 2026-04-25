@@ -16,18 +16,18 @@ pve_api_token_name:    "ansible-maint001"
 pve_api_token_id:      "{{ pve_api_token_name }}"
 pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
 
-# pve_api_token_secret — vault only, see vault/aaron-homelab.yml
+# pve_api_token_secret — vault only, see vault/aaron_homelab.yml
 
 pve_validate_certs: false
 pve_timeout: 300
 
 # ===== Cloud-Init (global wiring from vault) =====
-# pve_new_vm_cipassword comes from vault/aaron-homelab.yml.
+# pve_new_vm_cipassword comes from vault/aaron_homelab.yml.
 # All groups reference pve_create_cipassword, wired here so there is
 # exactly one place to change the default new-VM password.
 pve_create_cipassword: "{{ pve_new_vm_cipassword }}"
 
-# pve_ssh_public_key comes from vault/aaron-homelab.yml.
+# pve_ssh_public_key comes from vault/aaron_homelab.yml.
 # Override pve_create_sshkeys per-group or per-host if keys differ.
 pve_create_sshkeys: "{{ pve_ssh_public_key | default('') }}"
 

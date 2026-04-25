@@ -3,43 +3,52 @@
 # inventory/group_vars/elastic/main.yml
 #
 # Applies to all hosts in the [elastic] inventory group.
-# Uses pve_* vars directly — no aliasing layer.
+# Defines network, template, hardware, and cloud-init defaults for
+# Elasticsearch data/master nodes.
 #
-# These are consumed by the proxmox-vm role when creating or cloning
-# elasticsearch nodes.
+# Per-VM overrides (different node, extra RAM, dedicated key) go in
+# host_vars/<hostname>.yml.
 # =============================================================================
 
-# ===== Network =====
+# ===== Network ===== #
+# VLAN 30 — Elasticsearch stack subnet (192.168.30.0/24)
+pve_create_bridge:  "vmbr1"
+pve_create_vlan:    "30"
 pve_create_prefix:  24
 pve_create_gateway: "192.168.30.1"
-pve_bridge:         "vmbr1"
-pve_vlan:           "30"
 
-# ===== Clone settings =====
+# ===== Template ===== #
+# Each application group can point to its own template VMID and name.
+# If the template doesn't exist, vm_build_template.yml creates it automatically.
 pve_clone_template_id:   9000
 pve_clone_template_name: "elastic-ubuntu-cloudinit"
-pve_clone_storage:       "mydata"
-pve_clone_format:        "qcow2"
-pve_clone_full:          true
 pve_clone_target_node:   "walnut"
 
-# ===== Hardware =====
+# Cloud image — Ubuntu 24.04 LTS (same for all groups unless overridden)
+# pve_template_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+
+# ===== Clone Storage ===== #
+pve_clone_storage: "mydata"
+pve_clone_format:  "qcow2"
+pve_clone_full:    true
+
+# ===== Hardware ===== #
 pve_cores:   4
 pve_sockets: 1
 pve_memory:  8192     # MB
 pve_cpu:     "host"
 
-# ===== Storage =====
+# ===== Storage ===== #
 pve_disk_size: 100    # GB
 pve_scsihw:    "virtio-scsi-single"
 
-# ===== Cloud-Init =====
+# ===== Cloud-Init ===== #
 pve_create_use_cloudinit: true
 pve_ciuser: "ansible"
-# pve_cipassword — sourced from vault: pve_new_vm_cipassword
-# pve_sshkeys    — set per-host in host_vars or pass via extra-vars
+# pve_create_cipassword — wired from vault via group_vars/all/main.yml
+# pve_create_sshkeys    — wired from vault via group_vars/all/main.yml
 
-# ===== VM options =====
+# ===== VM Options ===== #
 pve_tags:       "elasticsearch,elastic-cluster,production"
 pve_onboot:     true
 pve_protection: false

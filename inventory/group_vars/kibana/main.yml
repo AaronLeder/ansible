@@ -1,32 +1,55 @@
 ---
 # =============================================================================
 # inventory/group_vars/kibana/main.yml
+#
+# Applies to all hosts in the [kibana] inventory group.
+# Kibana and Fleet Server share this group (kibana001 runs both).
 # =============================================================================
 
+# ===== Network ===== #
+# VLAN 30 — Elasticsearch stack subnet (192.168.30.0/24)
+pve_create_bridge:  "vmbr1"
+pve_create_vlan:    "30"
 pve_create_prefix:  24
 pve_create_gateway: "192.168.30.1"
-pve_bridge:         "vmbr1"
-pve_vlan:           "30"
 
-pve_clone_template_id:   9000
-pve_clone_template_name: "elastic-ubuntu-cloudinit"
-pve_clone_storage:       "mydata"
-pve_clone_format:        "qcow2"
-pve_clone_full:          true
+# ===== Template ===== #
+# Kibana uses its own template VMID to allow independent rebuilds.
+# Shares the same base Ubuntu cloud image as elastic by default.
+pve_clone_template_id:   9001
+pve_clone_template_name: "kibana-ubuntu-cloudinit"
 pve_clone_target_node:   "walnut"
 
+pve_clone_storage: "mydata"
+pve_clone_format:  "qcow2"
+pve_clone_full:    true
+
+# for creating new templates, can override with;
+# ansible-playbook playbooks/proxmox_vm_clone.yml \
+#   -i inventory/master_hosts.yml \
+#   -e "pve_clone_enabled=true" \
+#   -e "pve_clone_template_id=9000" \
+#   -e "pve_clone_template_name=kibana-ubuntu-cloudinit" \
+#   --ask-vault-pass
+pve_clone_template_id:   9001
+pve_clone_template_name: "kibana-ubuntu-cloudinit"
+
+# ===== Hardware ===== #
 pve_cores:   2
 pve_sockets: 1
-pve_memory:  4096
+pve_memory:  8192     # MB
 pve_cpu:     "host"
 
-pve_disk_size: 50
+# ===== Storage ===== #
+pve_disk_size: 100    # GB
 pve_scsihw:    "virtio-scsi-single"
 
+# ===== Cloud-Init ===== #
 pve_create_use_cloudinit: true
 pve_ciuser: "ansible"
 
-pve_tags:       "kibana,elasticsearch,production"
+# ===== VM Options ===== #
+pve_tags:       "kibana,fleet,elasticsearch,production"
 pve_onboot:     true
 pve_protection: false
 pve_agent:      "enabled=1"
