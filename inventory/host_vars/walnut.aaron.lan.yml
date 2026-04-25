@@ -1,0 +1,5 @@
+---
+# inventory/host_vars/walnut.aaron.lan.yml
+
+# ===== Ansible Vars ===== #
+ansible_host: 192.168.1.200

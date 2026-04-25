@@ -1,0 +1,8 @@
+---
+# inventory/host_vars/maint002.aaron.lan.yml
+
+# ===== Ansible Vars ===== #
+ansible_host: 192.168.29.3
+
+# ===== Proxmox Vars ===== #
+pve_vmid: 101

@@ -1,0 +1,8 @@
+---
+# inventory/host_vars/ubuntu002.dev.pve.yml
+
+# ===== Ansible Vars ===== #
+ansible_host: 192.168.35.12
+
+# ===== Proxmox Vars ===== #
+pve_vmid: 512

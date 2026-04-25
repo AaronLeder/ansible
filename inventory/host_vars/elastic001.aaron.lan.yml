@@ -1,0 +1,19 @@
+---
+# inventory/host_vars/elastic001.aaron.lan.yml
+
+# ===== Ansible Vars ===== #
+ansible_host: 192.168.30.11
+
+# ===== Proxmox Vars ===== #
+pve_vmid: 301
+
+# ===== Overrides ===== #
+# Uncomment to override group_vars/elastic defaults for this node only.
+# Common reasons: coordinating node needs more RAM, different target node,
+# dedicated SSH key, or a separate storage pool.
+#
+# pve_clone_target_node: "rainbow"
+# pve_cores:    8
+# pve_memory:   16384
+# pve_disk_size: 200
+# pve_sshkeys:  "ssh-ed25519 AAAA... ansible@maint001"

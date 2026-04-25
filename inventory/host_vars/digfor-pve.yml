@@ -1,0 +1,14 @@
+---
+# inventory/host_vars/digfor-pve.yml
+
+# ===== Ansible Vars ===== #
+ansible_host: 192.168.1.90
+
+# ===== Proxmox Vars ===== #
+pve_vmid: 151
+
+# ===== Network Overrides ===== #
+# School VLAN differs from infra defaults — override here rather than
+# creating a separate group_vars file for two hosts.
+pve_create_prefix:  24
+pve_create_gateway: 192.168.1.1

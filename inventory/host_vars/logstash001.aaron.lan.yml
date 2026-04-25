@@ -1,0 +1,14 @@
+---
+# inventory/host_vars/logstash001.aaron.lan.yml
+
+# ===== Ansible Vars ===== #
+ansible_host: 192.168.30.50
+
+# ===== Proxmox Vars ===== #
+pve_vmid: 350
+
+# ===== Overrides ===== #
+# pve_clone_target_node: "rainbow"
+# pve_cores:    4
+# pve_memory:   6144
+# pve_disk_size: 100

@@ -1,0 +1,15 @@
+---
+# inventory/host_vars/elastic002.aaron.lan.yml
+
+# ===== Ansible Vars ===== #
+ansible_host: 192.168.30.12
+
+# ===== Proxmox Vars ===== #
+pve_vmid: 302
+
+# ===== Overrides ===== #
+# pve_clone_target_node: "rainbow"
+# pve_cores:    8
+# pve_memory:   16384
+# pve_disk_size: 200
+# pve_sshkeys:  "ssh-ed25519 AAAA... ansible@maint001"
