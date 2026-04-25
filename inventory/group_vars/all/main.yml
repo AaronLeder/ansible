@@ -1,0 +1,41 @@
+---
+# =============================================================================
+# inventory/group_vars/all/main.yml
+#
+# Variables that apply to every host in every group.
+# Only put things here that are truly universal.
+# Group-specific vars belong in group_vars/<groupname>/main.yml.
+# =============================================================================
+
+# ===== Proxmox API (global) =====
+pve_api_host: "walnut"
+pve_api_port: 8006
+pve_api_user: "ansible@pve"
+
+pve_api_token_name:    "ansible-maint001"
+pve_api_token_id:      "{{ pve_api_token_name }}"
+pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
+
+# pve_api_token_secret — vault only, see vault/aaron-homelab.yml
+
+pve_validate_certs: false
+pve_timeout: 300
+
+# ===== Cloud-Init (global wiring from vault) =====
+# pve_new_vm_cipassword comes from vault/aaron-homelab.yml.
+# All groups reference pve_create_cipassword, wired here so there is
+# exactly one place to change the default new-VM password.
+pve_create_cipassword: "{{ pve_new_vm_cipassword }}"
+
+# pve_ssh_public_key comes from vault/aaron-homelab.yml.
+# Override pve_create_sshkeys per-group or per-host if keys differ.
+pve_create_sshkeys: "{{ pve_ssh_public_key | default('') }}"
+
+# ===== SSH / Ansible defaults =====
+ansible_user: ansible
+
+# ===== NTP ===== #
+# timezone: "America/New_York"
+# ntp_servers:
+#   - 0.pool.ntp.org
+#   - 1.pool.ntp.org

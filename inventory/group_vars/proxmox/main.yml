@@ -1,0 +1,18 @@
+---
+# =============================================================================
+# inventory/group_vars/proxmox/main.yml
+#
+# Applies to Proxmox hypervisor hosts (walnut, rainbow, cheddar, squeak).
+# These are the API targets for VM state operations — not managed VMs.
+# =============================================================================
+
+ansible_user: root
+ansible_port: 22
+
+# pve_vm_map is intentionally not set here.
+# Define it per-playbook or via extra-vars so it is always explicit:
+#
+#   -e '{"pve_vm_map": {"walnut": [151, 152], "rainbow": []}}'
+#
+# This prevents accidentally running state changes against the wrong VMIDs.
+pve_vm_map: {}
