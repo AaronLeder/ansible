@@ -1,0 +1,44 @@
+---
+# =============================================================================
+# vault/aaron-homelab.yml  (ansible-vault encrypted)
+#
+# All secrets for the aaron-homelab environment.
+# Encrypt with: ansible-vault encrypt vault/aaron-homelab.yml
+# Edit with:    ansible-vault edit vault/aaron-homelab.yml
+# View with:    ansible-vault view vault/aaron-homelab.yml
+#
+# CHANGES from previous version:
+#   + pve_create_cipassword removed as a separate var — it now resolves
+#     to pve_new_vm_cipassword via group_vars/all. Only one password to set.
+#   + pve_api_token_secret kept as-is (used by all Proxmox API calls)
+#   + Added elastic_* service account passwords (unchanged)
+#   + Added pve_ssh_public_key — single place to store your SSH key;
+#     referenced as pve_create_sshkeys in group_vars per-group
+# =============================================================================
+
+# ===== Ansible Passwords ===== #
+ansible_password: 'Test123$'
+ansible_become_password: "{{ ansible_password }}"
+
+# ===== Proxmox API ===== #
+# Token created in Proxmox UI → Datacenter → API Tokens
+# Instructions in docs/proxmox.md
+pve_api_token_secret: "82bed9a4-5c70-4e3f-91f2-a2caf2057648"
+
+# ===== Cloud-Init ===== #
+# Default password injected into all new VMs via cloud-init.
+# Referenced as pve_create_cipassword in role defaults.
+pve_new_vm_cipassword: "{{ ansible_password }}"
+
+# SSH public key injected into all new VMs via cloud-init.
+# URL-encode before use, or reference raw and let the role encode it.
+# Generate URL-encoded version:
+#   python3 -c "import urllib.parse,pathlib; \
+#     print(urllib.parse.quote(pathlib.Path('~/.ssh/id_ed25519.pub').expanduser().read_text().strip()))"
+pve_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA8LnFvbN445R74Zp0YKmOtq1WWyjNOV+n+VaVbOqZ+Q Ansible"  # raw key: "ssh-ed25519 AAAA... ansible@maint001"
+
+# ===== Elasticsearch Service Accounts ===== #
+elastic_password: "changeme1234"
+kibana_password: "changeme1234"
+logstash_password: "changeme1234"
+monitor_password: "changeme1234"
