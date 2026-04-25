@@ -1,0 +1,33 @@
+---
+# =============================================================================
+# proxmox_vm.yml — Master Proxmox VM Playbook
+#
+# Imports sub-playbooks for each operation. Run the master to execute all
+# enabled operations, or run sub-playbooks individually for targeted ops.
+#
+# Usage:
+#   Full run (respects enable flags):
+#     ansible-playbook playbooks/proxmox_vm.yml -i inventory/master_hosts.yml
+#
+#   Targeted (run only one operation):
+#     ansible-playbook playbooks/proxmox_vm_create.yml -i inventory/master_hosts.yml
+#     ansible-playbook playbooks/proxmox_vm_clone.yml  -i inventory/master_hosts.yml
+#     ansible-playbook playbooks/proxmox_vm_state.yml  -i inventory/master_hosts.yml
+#
+#   Tag-based (within master):
+#     ansible-playbook playbooks/proxmox_vm.yml -i inventory/master_hosts.yml \
+#       --tags pve_clone_vm
+#
+# IMPORTANT: import_playbook does NOT support `when:` conditionals.
+# Operation gating is handled by enable-flags (pve_create_enabled, pve_clone_enabled)
+# defined in group_vars/all/main.yml (defaults to false) and overridden per-playbook.
+# =============================================================================
+
+- name: "[1/3] VM State Management"
+  ansible.builtin.import_playbook: proxmox_vm_state.yml
+
+- name: "[2/3] VM Create from Scratch"
+  ansible.builtin.import_playbook: proxmox_vm_create.yml
+
+- name: "[3/3] VM Clone from Template"
+  ansible.builtin.import_playbook: proxmox_vm_clone.yml

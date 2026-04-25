@@ -1,0 +1,88 @@
+---
+# =============================================================================
+# proxmox_vm_create.yml — Create VMs from Scratch with Cloud-Init
+#
+# Creates new QEMU VMs on Proxmox with optional cloud-init drive injection.
+# Primary workflow: bare-metal VM + Proxmox-native cloud-init (cicustom).
+#
+# Required vars (set here or via group_vars/host_vars):
+#   pve_create_enabled: true          # must explicitly enable
+#   pve_create_vm: [list of FQDNs]   # or use pve_vm_to_create inventory group
+#
+# Usage:
+#   ansible-playbook playbooks/proxmox_vm_create.yml \
+#     -i inventory/master_hosts.yml \
+#     -e "pve_create_enabled=true" \
+#     -e '{"pve_create_vm":["elastic001.aaron.lan"]}'
+#
+# Cloud-init notes:
+#   - Proxmox generates the cloud-init ISO from ipconfig/ciuser/sshkeys vars
+#   - The drive is attached to ide2 by convention (kept free for this purpose)
+#   - If also attaching an OS ISO, it is placed on ide0 automatically
+# =============================================================================
+
+- name: Proxmox — Create VMs from Scratch (Cloud-Init)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Override to true to enable this workflow. Defaults false in group_vars.
+    pve_create_enabled: false
+
+  vars_files:
+    - ../vault/aaron-homelab.yml
+
+  pre_tasks:
+    - name: Pre-flight | Assert create workflow is explicitly enabled
+      ansible.builtin.assert:
+        that:
+          - pve_create_enabled | bool
+        fail_msg: >-
+          pve_create_enabled is false. Set -e "pve_create_enabled=true"
+          or enable it in your group_vars to run this workflow.
+      tags: [pve_create_vm, always]
+
+    - name: Pre-flight | Assert vault variable pve_api_token_secret is loaded
+      ansible.builtin.assert:
+        that:
+          - pve_api_token_secret is defined
+          - pve_api_token_secret | length > 0
+        fail_msg: >-
+          pve_api_token_secret is not set. Ensure vault/aaron-homelab.yml
+          is decrypted and loaded correctly.
+      tags: [pve_create_vm, always]
+
+    - name: Pre-flight | Assert cloud-init password is set when cloud-init is enabled
+      ansible.builtin.assert:
+        that:
+          - pve_create_cipassword is defined
+          - pve_create_cipassword | length > 0
+        fail_msg: >-
+          pve_create_use_cloudinit is true but pve_create_cipassword is empty.
+          Set pve_new_vm_cipassword in vault or pve_create_cipassword in vars.
+      when: pve_create_use_cloudinit | default(false) | bool
+      tags: [pve_create_vm, always]
+
+    - name: Pre-flight | Warn if SSH keys are not set (cloud-init)
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: pve_create_sshkeys is empty. VMs will only be accessible
+          via password auth. Consider adding an SSH public key.
+      when:
+        - pve_create_use_cloudinit | default(false) | bool
+        - (pve_create_sshkeys | default('')) | length == 0
+      tags: [pve_create_vm]
+
+  roles:
+    - role: proxmox_vm
+  tags: [pve_create_vm]
+
+  post_tasks:
+    - name: Post | Summarise created VMs
+      ansible.builtin.debug:
+        msg: >-
+          Create workflow complete. Targets: {{ pve_create_targets | default([]) }}.
+          Cloud-init enabled: {{ pve_create_use_cloudinit | default(false) }}.
+          Auto-start: {{ pve_create_autostart | default(false) }}.
+      tags: [pve_create_vm]

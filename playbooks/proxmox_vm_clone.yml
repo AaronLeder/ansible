@@ -1,0 +1,102 @@
+---
+# =============================================================================
+# proxmox_vm_clone.yml — Clone VMs from a Cloud-Init Template
+#
+# Clones an existing Proxmox QEMU template and applies cloud-init config
+# (IP, user, SSH keys) to each clone via the Proxmox API.
+#
+# Required vars (set here or via group_vars/host_vars):
+#   pve_clone_enabled: true              # must explicitly enable
+#   pve_clone_template_id: <int>         # VMID of the source template
+#   pve_clone_template_name: "<string>"  # name of the source template
+#
+# Inventory group 'pve_vm_to_clone' drives which VMs are cloned.
+# Each host in that group must define:
+#   ansible_host: <ip>
+#   pve_vmid:     <unique int>
+#
+# Usage:
+#   ansible-playbook playbooks/proxmox_vm_clone.yml \
+#     -i inventory/master_hosts.yml \
+#     -e "pve_clone_enabled=true"
+#
+#   Target a specific group instead of pve_vm_to_clone:
+#     -e '{"pve_clone_targets": "{{ groups[\"elastic\"] }}"}'
+# =============================================================================
+
+- name: Proxmox — Clone VMs from Template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Override to true to enable this workflow. Defaults false in group_vars.
+    pve_clone_enabled: false
+
+  vars_files:
+    - ../vault/aaron-homelab.yml
+
+  pre_tasks:
+    - name: Pre-flight | Assert clone workflow is explicitly enabled
+      ansible.builtin.assert:
+        that:
+          - pve_clone_enabled | bool
+        fail_msg: >-
+          pve_clone_enabled is false. Set -e "pve_clone_enabled=true"
+          or enable it in your group_vars to run this workflow.
+      tags: [pve_clone_vm, always]
+
+    - name: Pre-flight | Assert vault variable pve_api_token_secret is loaded
+      ansible.builtin.assert:
+        that:
+          - pve_api_token_secret is defined
+          - pve_api_token_secret | length > 0
+        fail_msg: >-
+          pve_api_token_secret is not set. Ensure vault/aaron-homelab.yml
+          is decrypted and loaded correctly.
+      tags: [pve_clone_vm, always]
+
+    - name: Pre-flight | Assert template ID and name are set
+      ansible.builtin.assert:
+        that:
+          - pve_clone_template_id is defined
+          - pve_clone_template_name is defined
+          - pve_clone_template_name | length > 0
+        fail_msg: >-
+          pve_clone_template_id and pve_clone_template_name must both be set.
+          Check group_vars/all/main.yml or playbook vars.
+      tags: [pve_clone_vm, always]
+
+    - name: Pre-flight | Assert cloud-init password is set when cloud-init is enabled
+      ansible.builtin.assert:
+        that:
+          - pve_create_cipassword is defined
+          - pve_create_cipassword | length > 0
+        fail_msg: >-
+          pve_create_use_cloudinit is true but pve_create_cipassword is empty.
+          Set pve_new_vm_cipassword in vault or pve_create_cipassword in vars.
+      when: pve_create_use_cloudinit | default(false) | bool
+      tags: [pve_clone_vm, always]
+
+    - name: Pre-flight | Warn if SSH keys are not set (cloud-init)
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: pve_create_sshkeys is empty. Cloned VMs will only be
+          accessible via password auth. Consider adding an SSH public key.
+      when:
+        - pve_create_use_cloudinit | default(false) | bool
+        - (pve_create_sshkeys | default('')) | length == 0
+      tags: [pve_clone_vm]
+
+  roles:
+    - role: proxmox_vm
+  tags: [pve_clone_vm]
+
+  post_tasks:
+    - name: Post | Summarise cloned VMs
+      ansible.builtin.debug:
+        msg: >-
+          Clone workflow complete. Template: {{ pve_clone_template_name }}
+          (VMID {{ pve_clone_template_id }}). Targets: {{ pve_clone_targets | default([]) }}.
+          Auto-start: {{ pve_create_autostart | default(false) }}.
+      tags: [pve_clone_vm]

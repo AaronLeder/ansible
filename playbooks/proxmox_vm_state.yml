@@ -1,0 +1,62 @@
+---
+# =============================================================================
+# proxmox_vm_state.yml — Change VM Power State
+#
+# Starts, stops, resets, or suspends VMs on specified Proxmox nodes.
+#
+# Required vars:
+#   pve_vm_state: started | stopped | restarted | suspended | absent
+#   pve_vm_map:   map of node -> list of VMIDs  (or leave empty to skip)
+#
+# Usage:
+#   ansible-playbook playbooks/proxmox_vm_state.yml \
+#     -i inventory/master_hosts.yml \
+#     -e "pve_vm_state=started" \
+#     -e '{"pve_vm_map":{"walnut":[151,152]}}'
+# =============================================================================
+
+- name: Proxmox — Change VM State
+  hosts: proxmox
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - ../vault/aaron-homelab.yml
+
+  pre_tasks:
+    - name: Pre-flight | Validate pve_vm_state is defined and not null
+      ansible.builtin.assert:
+        that:
+          - pve_vm_state is defined
+          - pve_vm_state is not none
+          - pve_vm_state | length > 0
+        fail_msg: >-
+          pve_vm_state must be defined and non-empty.
+          Valid values: started, stopped, restarted, suspended, absent.
+      when: (pve_vmids | default([]) | length) > 0
+      tags: [pve_state_vm, always]
+
+    - name: Pre-flight | Confirm destructive state changes
+      ansible.builtin.pause:
+        prompt: >-
+          WARNING: pve_vm_state={{ pve_vm_state }} on VMIDs {{ pve_vmids }}
+          for node {{ inventory_hostname_short }}.
+          Press ENTER to continue or Ctrl+C to abort.
+      when:
+        - (pve_vmids | default([]) | length) > 0
+        - pve_vm_state in ['stopped', 'absent', 'restarted']
+        - not (pve_skip_confirm | default(false) | bool)
+      tags: [pve_state_vm]
+
+  roles:
+    - role: proxmox_vm
+  tags: [pve_state_vm]
+
+  post_tasks:
+    - name: Post | Report VM state changes
+      ansible.builtin.debug:
+        msg: >-
+          Node {{ inventory_hostname_short }}: requested state '{{ pve_vm_state }}'
+          for VMIDs {{ pve_vmids | default([]) }}.
+      when: (pve_vmids | default([]) | length) > 0
+      tags: [pve_state_vm]
