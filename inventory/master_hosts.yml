@@ -1,91 +1,59 @@
-# Proxmox minimum per-host variables for CLONING (these are what drive hostname/IP):
-#ansible_host: 192.168.30.50
-#pve_prefix: 24
-#pve_gateway: 192.168.30.1
-# Optional:
-#pve_vmid: 150
-#clone_storage: local-zfs
-#clone_target_node: pve
-#clone_format: raw
-#clone_pool: somepool
+---
+# =============================================================================
+# inventory/master_hosts.yml
+#
+# Groups only — per-host ansible_host and pve_vmid live in host_vars/.
+# Per-group defaults (network, hardware, cloud-init) live in group_vars/.
+#
+# Group structure:
+#   proxmox        — hypervisor API targets (VM state operations)
+#   elastic        — Elasticsearch data/master nodes
+#   kibana         — Kibana + Fleet nodes
+#   logstash       — Logstash nodes
+#   fleet          — Fleet Server (alias of kibana; same hosts)
+#   elasticsearch  — Parent group: elastic + kibana + logstash + fleet
+#   infra          — Infrastructure VMs (maint, jump, etc.)
+#   dev            — Development / scratch VMs
+#   school         — School lab VMs (separate VLAN/gateway)
+#   pve_vm_to_clone  — Dynamic target list for the clone workflow
+# =============================================================================
 
 all:
   children:
-    # ===== School ===== #
-    school:
-      hosts:
-        digfor-pve:
-          ansible_host: 192.168.1.90
-          pve_vmid: 151
-          pve_prefix: 24
-          pve_gateway: 192.168.1.1
-        appsec-pve:
-          ansible_host: 192.168.1.118
-          pve_vmid: 152
-          pve_prefix: 24
-          pve_gateway: 192.168.1.1
 
-    # ===== Proxmox ===== #
+    # ===== Proxmox Hypervisors ===== #
     proxmox:
       hosts:
         walnut.aaron.lan:
-          ansible_host: 192.168.1.200
         rainbow.aaron.lan:
-          ansible_host: 192.168.1.201
         cheddar.aaron.lan:
-          ansible_host: 192.168.1.202
-        squeak.aaron.lan: 
-          ansible_host: 192.168.1.203
+        squeak.aaron.lan:
 
-    # ===== VMs TO CLONE ===== #
-    # Add hosts here that you want to clone with default settings
-    # Or target specific groups (elastic, kibana, logstash, infra, dev)
-    pve_vm_to_clone:
-      hosts:
-        elastic001.aaron.lan:
-
-    # ===== Infra ===== #
+    # ===== Infrastructure ===== #
     infra:
       hosts:
-        maint001.aaron.lan:
-          ansible_host: 192.168.29.2
-          pve_vmid: 100
-        maint002.aaron.lan:
-          ansible_host: 192.168.29.3
-          pve_vmid: 101
-          
-    # ===== Elasticsearch ===== #
+        maint00[1:2].aaron.lan:
+
+    # ===== Elasticsearch Stack ===== #
     elastic:
       hosts:
-        elastic001.aaron.lan:
-          ansible_host: 192.168.30.11
-          pve_vmid: 301
+        elastic00[1:3].aaron.lan:
 
-        elastic002.aaron.lan:
-          ansible_host: 192.168.30.12
-          pve_vmid: 302
-
-        elastic003.aaron.lan:
-          ansible_host: 192.168.30.13
-          pve_vmid: 303
- 
     logstash:
       hosts:
         logstash001.aaron.lan:
-          ansible_host: 192.168.30.50
-          pve_vmid: 350
 
     kibana:
       hosts:
         kibana001.aaron.lan:
-          ansible_host: 192.168.30.60
-          pve_vmid: 360
 
     fleet:
       hosts:
         kibana001.aaron.lan:
-          ansible_host: 192.168.30.60
-          pve_vmid: 360
+
+    agent:
+      hosts:
+        elastic00[1:3].aaron.lan:
 
     elasticsearch:
       children:
@@ -93,22 +61,29 @@ all:
         kibana:
         logstash:
         fleet:
+        agent:
 
-    # ===== DEV ===== #
+    # ===== Dev ===== #
     dev:
-      hosts: 
-        ubuntu001.dev.pve:
-          ansible_host: 192.168.35.11
-          pve_vmid: 511
-        ubuntu002.dev.pve:
-          ansible_host: 192.168.35.12
-          pve_vmid: 512
-        ubuntu003.dev.pve:
-          ansible_host: 192.168.35.13
-          pve_vmid: 513
-        ubuntu004.dev.pve:
-          ansible_host: 192.168.35.14
-          pve_vmid: 514
-        ubuntu005.dev.pve:
-          ansible_host: 192.168.35.15
-          pve_vmid: 515
+      hosts:
+        ubuntu00[1:5].dev.pve:
+
+    # ===== School ===== #
+    # School hosts sit on a separate VLAN (192.168.1.0/24) — override
+    # network vars in host_vars if they differ from infra defaults.
+    school:
+      hosts:
+        digfor-pve:
+        appsec-pve:
+
+    # ===== Clone Targets ===== #
+    # Default group consumed by the clone workflow when pve_clone_targets
+    # is not overridden. Populate with whichever hosts you want cloned in
+    # the current run, then clear it afterwards.
+    #
+    # Alternatively, override pve_clone_targets in the playbook or via
+    # extra-vars to target a specific group without editing this file:
+    #   -e '{"pve_clone_targets": "{{ groups[\"elastic\"] }}"}'
+    pve_vm_to_clone:
+      hosts:
+        elastic001.aaron.lan:
