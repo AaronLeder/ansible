@@ -1,0 +1,28 @@
+---
+# =============================================================================
+# vm_change_state.yml
+#
+# Changes the power state of one or more VMs on a given Proxmox node.
+# Runs once per node in the [proxmox] inventory group.
+#
+# Consumed vars:
+#   pve_vm_state  — target state: started | stopped | restarted | suspended | absent
+#   pve_vmids     — list of VMIDs for this node (resolved from pve_vm_map in defaults)
+#   pve_node      — short hostname of the Proxmox node (auto-set from inventory)
+# =============================================================================
+
+- name: State | Change state of specified VMs on {{ inventory_hostname_short }}
+  delegate_to: localhost
+  community.proxmox.proxmox_kvm:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    node:             "{{ pve_node | default(inventory_hostname_short) }}"
+    vmid:             "{{ item | int }}"
+    state:            "{{ pve_vm_state }}"
+    timeout:          "{{ pve_timeout | default(300) }}"
+  loop: "{{ pve_vmids | default([]) }}"
+  when: (pve_vmids | default([]) | length) > 0

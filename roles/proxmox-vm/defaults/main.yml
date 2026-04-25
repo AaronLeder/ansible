@@ -1,105 +1,102 @@
 ---
-# ===== Proxmox Defaults ===== #
+# =============================================================================
+# roles/proxmox-vm/defaults/main.yml
+#
+# Canonical defaults for the proxmox-vm role.
+# All variables use the pve_* namespace directly — no aliasing.
+#
+# Override priority (highest → lowest):
+#   extra-vars > host_vars > group_vars/<group> > group_vars/all > here
+# =============================================================================
+
+# ===== Proxmox API =====
 pve_api_host: "walnut"
 pve_api_port: 8006
 pve_api_user: "ansible@pve"
 
-# Token name ONLY for community.proxmox modules
+# Token name only — used by community.proxmox modules
 pve_api_token_name: "ansible-maint001"
 pve_api_token_id: "{{ pve_api_token_name }}"
 
-# Full "user@realm!tokenname" ONLY for raw REST Authorization header usage
+# Full "user@realm!tokenname" — used in raw REST Authorization headers
 pve_api_token_full_id: "{{ pve_api_user }}!{{ pve_api_token_name }}"
 
-# Proxmox token secret must come from vault/group_vars/extra-vars
-# pve_api_token_secret: "..."
-
+# pve_api_token_secret comes from vault only — never committed
 pve_validate_certs: false
 pve_timeout: 300
 
-# === Don't touch! === #
-pve_node: "{{ inventory_hostname_short }}"
+# ===== Internal computed vars (do not override) =====
+pve_node:  "{{ inventory_hostname_short }}"
 pve_vmids: "{{ pve_vm_map[inventory_hostname_short] | default([]) }}"
+
+# ===== VM State =====
+# pve_vm_state: null  — define in playbook or extra-vars; leave undefined to skip
+# pve_vm_map: {}       — define in playbook: {walnut: [151, 152]}
+
+# ===== VM Clone =====
+pve_clone_enabled:       false
+pve_clone_template_id:   9000
+pve_clone_template_name: "ubuntu-cloudinit"
+pve_clone_storage:       "mydata"
+pve_clone_format:        "qcow2"
+pve_clone_pool:          ""
+pve_clone_full:          true
+pve_clone_timeout:       900
+pve_clone_disk_size:     100  # GB, used only if template clone has no disk
+
+# Target node for clone operations (defaults to pve_api_host)
+pve_clone_target_node: "{{ pve_api_host }}"
+
+# Resolved list of clone targets — override to target a different group
 pve_clone_targets: "{{ groups['pve_vm_to_clone'] | default([]) }}"
 
-# ===== VM Clone ===== #
-# Clean enable/disable (do NOT comment vars out to "disable")
-pve_clone_enabled: false
-
-# Required when clone enabled
-pve_clone_template_id: 9000
-pve_clone_template_name: "elastic-ubuntu-cloudinit"
-pve_clone_vmid_start: 100
-
-# Optional (may be overridden per-host)
-pve_clone_storage: mydata
-pve_clone_format: qcow2
-pve_clone_pool: ""
-pve_clone_full: true
-pve_clone_timeout: 900
-
-# ===== VM Create from Scratch ===== #
-# Clean enable/disable
+# ===== VM Create from Scratch =====
 pve_create_enabled: false
 
-# List of hosts to create (can be overridden in playbook)
-# Example: ['elastic001.aaron.lan', 'elastic002.aaron.lan']
+# List of FQDNs to create, e.g. ['elastic001.aaron.lan']
+# Falls back to inventory group 'pve_vm_to_create' if empty
 pve_create_vm: []
 
-# Fallback: inventory group containing VMs to create
-pve_create_targets: "{{ pve_create_vm if (pve_create_vm | length) > 0 else groups['pve_vm_to_create'] | default([]) }}"
-
-# Required when create enabled
-pve_create_vmid_start: 200
-
-# Target node (defaults to pve_api_host)
+# Target node for create operations
 pve_create_target_node: "{{ pve_api_host }}"
 
-# Hardware defaults
-pve_create_cores: 2
+# Hardware
+pve_create_cores:   2
 pve_create_sockets: 1
-pve_create_memory: 2048  # MB
-pve_create_cpu: "host"
+pve_create_memory:  2048    # MB
+pve_create_cpu:     "host"
 
-# BIOS/Machine
-pve_create_bios: "seabios"  # or "ovmf" for UEFI
+# BIOS / machine
+pve_create_bios:    "seabios"   # ovmf for UEFI
 pve_create_machine: "q35"
-pve_create_boot: "order=scsi0;ide2;net0"
+pve_create_boot:    "order=scsi0;ide2;net0"
+pve_create_ostype:  "l26"       # l26=Linux 2.6+, win10, win11, etc.
 
-# OS type (affects drivers/defaults)
-# Common: l26 (Linux 2.6+), l24 (Linux 2.4), win10, win11
-pve_create_ostype: "l26"
+# Storage
+pve_create_storage:   "local-lvm"
+pve_create_disk_size: 32         # GB — integer only, no 'G' suffix
+pve_create_scsihw:    "virtio-scsi-single"
 
-# Storage configuration
-pve_create_storage: "local-lvm"
-pve_create_disk_size: "32G"
-pve_create_scsihw: "virtio-scsi-single"
-
-# Network configuration
+# Network
 pve_create_bridge: "vmbr1"
-pve_create_vlan: "29"  # VLAN 29 for nic1
+pve_create_vlan:   "29"
+pve_create_prefix: 24
+pve_create_gateway: "192.168.1.1"
 
-# ISO/CDROM - Examples:
-# "local:iso/ubuntu-24.04.2-desktop-amd64.iso"
-# "local:iso/debian-12.5.0-amd64-netinst.iso"
-# Leave empty for no ISO
+# ISO / CDROM — leave empty for no ISO
 pve_create_iso: ""
 
-# Additional options
-pve_create_agent: "enabled=1"  # QEMU guest agent
-pve_create_onboot: false       # Start on host boot
-pve_create_protection: false   # Prevent accidental deletion
-pve_create_tags: ""            # Comma-separated tags
-pve_create_pool: ""            # Resource pool
+# Misc options
+pve_create_agent:      "enabled=1"
+pve_create_onboot:     false
+pve_create_protection: false
+pve_create_tags:       ""
+pve_create_pool:       ""
+pve_create_autostart:  false
+pve_create_timeout:    300
 
-# Cloud-init (optional)
+# ===== Cloud-Init =====
 pve_create_use_cloudinit: false
-pve_create_ciuser: ""
-pve_create_cipassword: ""
-pve_create_sshkeys: ""         # URL-encoded SSH public keys
-
-# Auto-start VMs after creation
-pve_create_autostart: false
-
-# Timeout for VM creation
-pve_create_timeout: 300
+pve_create_ciuser:        ""
+pve_create_cipassword:    ""   # set in vault: pve_new_vm_cipassword
+pve_create_sshkeys:       ""   # URL-encoded SSH public key(s)

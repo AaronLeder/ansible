@@ -1,0 +1,177 @@
+---
+# =============================================================================
+# vm_create_baremetl.yml
+#
+# Creates new QEMU VMs from scratch using the pre-validated pve_create_plan.
+# Attaches a cloud-init drive (ide2) when pve_create_use_cloudinit is true.
+# Verifies disk + boot order, waits for VMs to appear, then optionally starts.
+# =============================================================================
+
+# ----- VMID collision guard --------------------------------------------------
+
+- name: Create | Check whether target VMIDs already exist
+  community.proxmox.proxmox_vm_info:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password:     "{{ pve_api_password | default(omit) }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ item.vmid }}"
+  loop: "{{ pve_create_plan }}"
+  register: _vmid_check
+
+- name: Create | Fail if any target VMID already exists
+  ansible.builtin.assert:
+    that:
+      - (item.proxmox_vms | default([]) | length) == 0
+    fail_msg: >-
+      VMID {{ item.item.vmid }} for '{{ item.item.host }}' already exists.
+      Choose a different pve_vmid or remove the existing VM first.
+  loop: "{{ _vmid_check.results }}"
+
+# ----- VM creation -----------------------------------------------------------
+
+- name: Create | Create new VMs from scratch
+  community.proxmox.proxmox_kvm:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password:     "{{ pve_api_password | default(omit) }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+
+    node:       "{{ item.target_node }}"
+    vmid:       "{{ item.vmid }}"
+    name:       "{{ item.host }}"
+
+    cores:      "{{ item.cores }}"
+    sockets:    "{{ item.sockets }}"
+    memory:     "{{ item.memory }}"
+    cpu:        "{{ item.cpu }}"
+
+    bios:       "{{ item.bios }}"
+    machine:    "{{ item.machine }}"
+    boot:       "{{ item.boot }}"
+    ostype:     "{{ item.ostype }}"
+
+    scsi:       "{{ item.scsi }}"
+    scsihw:     "{{ item.scsihw }}"
+    net:        "{{ item.net }}"
+
+    # ide2 = cloud-init drive; ide0 = OS ISO (when both are needed)
+    ide: "{{ item.ide if ((item.ide | default({})) | length) > 0 else omit }}"
+
+    agent:      "{{ item.agent }}"
+    onboot:     "{{ item.onboot }}"
+    protection: "{{ item.protection }}"
+    tags:       "{{ item.tags if ((item.tags | default('') | string | length) > 0) else omit }}"
+    pool:       "{{ item.pool if ((item.pool | default('') | string | length) > 0) else omit }}"
+
+    ipconfig:   "{{ item.ipconfig if (item.ipconfig | default({}) | length) > 0 else omit }}"
+    ciuser:     "{{ item.ciuser if ((item.ciuser | default('') | length) > 0) else omit }}"
+    cipassword: "{{ item.cipassword if ((item.cipassword | default('') | length) > 0) else omit }}"
+    sshkeys:    "{{ item.sshkeys if ((item.sshkeys | default('') | length) > 0) else omit }}"
+
+    state:   present
+    timeout: "{{ pve_create_timeout | default(300) }}"
+  loop: "{{ pve_create_plan }}"
+  register: _create_result
+
+# ----- Post-create: enforce disk + boot order --------------------------------
+# The creation call sometimes doesn't persist disk/boot atomically on all PVE
+# versions. This idempotent update call ensures correct state.
+
+- name: Create | Enforce boot disk and boot order (idempotent post-create fix)
+  community.proxmox.proxmox_kvm:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    api_password:     "{{ pve_api_password | default(omit) }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+
+    node:    "{{ item.target_node }}"
+    vmid:    "{{ item.vmid }}"
+    scsihw:  "{{ item.scsihw }}"
+    scsi:    "{{ item.scsi }}"
+    ide:     "{{ item.ide if ((item.ide | default({})) | length) > 0 else omit }}"
+    boot:    "{{ item.boot | default('order=scsi0;ide2;net0') }}"
+    update:  true
+    timeout: "{{ pve_create_timeout | default(300) }}"
+  loop: "{{ pve_create_plan }}"
+
+# ----- Verification ----------------------------------------------------------
+
+- name: Create | Read VM config from API for verification
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes/{{ item.target_node }}/qemu/{{ item.vmid }}/config"
+    method: GET
+    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    return_content: true
+    status_code: [200]
+    headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
+  loop: "{{ pve_create_plan }}"
+  register: _pve_vm_cfg
+  changed_when: false
+  no_log: true
+
+- name: Create | Assert disk device and boot order are present
+  ansible.builtin.assert:
+    that:
+      - (item.json.data.scsi0 is defined)
+        or (item.json.data.virtio0 is defined)
+        or (item.json.data.sata0 is defined)
+      - (item.json.data.boot is defined)
+        and (
+          'scsi0' in (item.json.data.boot | string)
+          or 'virtio0' in (item.json.data.boot | string)
+          or 'sata0' in (item.json.data.boot | string)
+        )
+    fail_msg: >-
+      VMID {{ item.item.vmid }} on {{ item.item.target_node }} has no valid
+      disk or boot order after creation.
+      scsi0={{ item.json.data.scsi0 | default('missing') }},
+      boot={{ item.json.data.boot | default('missing') }}
+  loop: "{{ _pve_vm_cfg.results }}"
+
+# ----- Wait for inventory registration --------------------------------------
+
+- name: Create | Wait for VMs to appear in Proxmox inventory
+  community.proxmox.proxmox_vm_info:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    type: qemu
+    vmid: "{{ item.vmid }}"
+  register: _wait_vm
+  until: (_wait_vm.proxmox_vms | default([]) | length) == 1
+  retries: 30
+  delay: 5
+  loop: "{{ pve_create_plan }}"
+  changed_when: false
+
+# ----- Optional auto-start --------------------------------------------------
+
+- name: Create | Start VMs flagged for auto-start
+  community.proxmox.proxmox_kvm:
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
+    api_token_secret: "{{ pve_api_token_secret }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
+    node:    "{{ item.target_node }}"
+    vmid:    "{{ item.vmid }}"
+    state:   started
+    timeout: "{{ pve_timeout | default(300) }}"
+  loop: "{{ pve_create_plan }}"
+  when: item.autostart | default(false) | bool

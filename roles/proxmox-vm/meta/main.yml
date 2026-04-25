@@ -1,0 +1,22 @@
+---
+# =============================================================================
+# roles/proxmox-vm/meta/main.yml
+# =============================================================================
+
+galaxy_info:
+  role_name:    proxmox-vm
+  author:       aaron
+  description:  "Create, clone, and manage QEMU VMs on Proxmox VE with cloud-init support"
+  license:      MIT
+  min_ansible_version: "2.14"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+
+collections:
+  - community.proxmox
+
+dependencies: []

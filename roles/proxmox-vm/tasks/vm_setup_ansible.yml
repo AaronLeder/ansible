@@ -1,0 +1,26 @@
+---
+# =============================================================================
+# vm_setup_controller.yml
+#
+# Installs the community.proxmox collection and Python dependencies on the
+# Ansible controller. Opt-in only — never runs unless setup_ansible=true.
+#
+# Usage:
+#   ansible-playbook playbooks/proxmox-vm.yml \
+#     -e "setup_ansible=true" --tags cfg_ansible_for_pve
+# =============================================================================
+
+- name: Setup | Install community.proxmox Ansible collection
+  ansible.builtin.command: ansible-galaxy collection install community.proxmox
+  register: _collection_install
+  changed_when: "'Installing' in _collection_install.stdout"
+  failed_when: _collection_install.rc != 0
+
+- name: Setup | Install Python proxmox dependencies
+  become: true
+  ansible.builtin.apt:
+    name:
+      - python3-proxmoxer
+      - python3-requests
+    state: present
+    update_cache: true

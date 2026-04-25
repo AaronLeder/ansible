@@ -1,28 +1,52 @@
 ---
+# =============================================================================
+# roles/proxmox-vm/tasks/main.yml
+#
+# Slim dispatcher. Each block maps to exactly one operation.
+# Guards use the canonical enable-flags; the playbook pre_tasks already
+# validate these, so failures here are a secondary safety net.
+#
+# Task file naming convention: vm_<verb>_<noun>.yml
+# =============================================================================
+
+# ----- Ansible Controller Setup (opt-in, never tag) -------------------------
+- name: Configure Ansible controller for community.proxmox
+  when: setup_ansible | default(false) | bool
+  ansible.builtin.include_tasks: vm_setup_ansible.yml
+  tags:
+    - cfg_ansible_for_pve
+    - never
+
+# ----- VM State --------------------------------------------------------------
 - name: Change state of designated VMs
-  when: pve_vm_state is defined and pve_vm_state is not none
-  ansible.builtin.include_tasks: vm_state.yml
+  when:
+    - pve_vm_state is defined
+    - pve_vm_state is not none
+    - pve_vm_state | length > 0
+  ansible.builtin.include_tasks: vm_change_state.yml
   tags:
     - pve_state_vm
 
-- name: Create VMs from scratch
-  when: (pve_create_enabled | default(false) | bool)
+# ----- VM Create from Scratch ------------------------------------------------
+- name: Create VMs from scratch with cloud-init
+  when: pve_create_enabled | default(false) | bool
   block:
-    - name: Preflight checks and create plan
+    - name: Run create pre-flight checks
       ansible.builtin.import_tasks: vm_create_preflight.yml
 
-    - name: Create designated VMs
-      ansible.builtin.include_tasks: vm_create_bare_metal.yml
+    - name: Execute bare-metal VM creation
+      ansible.builtin.include_tasks: vm_create_baremetl.yml
   tags:
     - pve_create_vm
 
-- name: Clone VMs from template
-  when: (pve_clone_enabled | default(false) | bool)
+# ----- VM Clone from Template ------------------------------------------------
+- name: Clone VMs from cloud-init template
+  when: pve_clone_enabled | default(false) | bool
   block:
-    - name: Preflight checks and clone plan
+    - name: Run clone pre-flight checks
       ansible.builtin.import_tasks: vm_clone_preflight.yml
 
-    - name: Clone designated VMs
+    - name: Execute template clone
       ansible.builtin.include_tasks: vm_clone_template.yml
   tags:
     - pve_clone_vm

@@ -1,42 +1,64 @@
 ---
-- name: Skip clone workflow when disabled
+# =============================================================================
+# vm_clone_preflight.yml
+#
+# Validates all inputs, queries the cluster, verifies the template exists,
+# and builds pve_clone_plan — a list of dicts that vm_clone_template.yml
+# iterates over.
+# =============================================================================
+
+- name: Clone Preflight | Guard — skip when disabled
   ansible.builtin.debug:
     msg: "pve_clone_enabled=false; skipping clone workflow."
   when: not (pve_clone_enabled | default(true) | bool)
 
-- name: End play when clone workflow is disabled
+- name: Clone Preflight | End play when disabled
   ansible.builtin.meta: end_play
   when: not (pve_clone_enabled | default(true) | bool)
 
-- name: Determine clone targets list
-  ansible.builtin.set_fact:
-    pve_clone_targets_resolved: "{{ pve_clone_targets }}"
+# ----- Resolve target list ---------------------------------------------------
 
-- name: Assert clone targets list is not empty
+- name: Clone Preflight | Resolve clone target list
+  ansible.builtin.set_fact:
+    _pve_clone_targets: "{{ pve_clone_targets | default(groups['pve_vm_to_clone'] | default([])) }}"
+
+- name: Clone Preflight | Assert target list is not empty
   ansible.builtin.assert:
     that:
-      - (pve_clone_targets_resolved | length) > 0
+      - (_pve_clone_targets | length) > 0
     fail_msg: >-
-      No clone targets found. Set pve_clone_vm list in playbook
-      or populate inventory group 'pve_vm_to_clone'.
+      No clone targets found. Populate inventory group 'pve_vm_to_clone',
+      or set pve_clone_targets in the playbook/vars.
 
-- name: Assert required per-host inventory vars exist
+# ----- Per-host inventory checks ---------------------------------------------
+
+- name: Clone Preflight | Assert each target has ansible_host and pve_vmid
   ansible.builtin.assert:
     that:
       - hostvars[item].ansible_host is defined
       - hostvars[item].pve_vmid is defined
-    fail_msg: "{{ item }} must define ansible_host and pve_vmid in inventory"
-  loop: "{{ pve_clone_targets_resolved }}"
+    fail_msg: >-
+      '{{ item }}' must define both ansible_host and pve_vmid.
+      Add them to inventory/master_hosts.yml or host_vars/{{ item }}.yml.
+  loop: "{{ _pve_clone_targets }}"
 
-- name: Assert required network vars exist (from inventory or group_vars or playbook)
+- name: Clone Preflight | Assert network vars are available for each target
   ansible.builtin.assert:
     that:
-      - (hostvars[item].pve_create_prefix is defined) or (pve_create_prefix is defined) or (hostvars[item].pve_prefix is defined)
-      - (hostvars[item].pve_create_gateway is defined) or (pve_create_gateway is defined) or (hostvars[item].pve_gateway is defined)
-    fail_msg: "{{ item }} must have pve_create_prefix/pve_prefix and pve_create_gateway/pve_gateway defined (in inventory, group_vars, or playbook vars)"
-  loop: "{{ pve_clone_targets_resolved }}"
+      - (hostvars[item].pve_create_prefix is defined)
+        or (pve_create_prefix is defined)
+        or (hostvars[item].pve_prefix is defined)
+      - (hostvars[item].pve_create_gateway is defined)
+        or (pve_create_gateway is defined)
+        or (hostvars[item].pve_gateway is defined)
+    fail_msg: >-
+      '{{ item }}' needs a prefix and gateway. Set pve_create_prefix/pve_prefix
+      and pve_create_gateway/pve_gateway in host_vars, group_vars, or playbook.
+  loop: "{{ _pve_clone_targets }}"
 
-- name: Query Proxmox cluster nodes
+# ----- Proxmox cluster query -------------------------------------------------
+
+- name: Clone Preflight | Query Proxmox cluster node list
   ansible.builtin.uri:
     url: "https://{{ pve_api_host }}:{{ pve_api_port | default(8006) }}/api2/json/nodes"
     method: GET
@@ -45,48 +67,57 @@
     status_code: [200]
     headers:
       Authorization: "PVEAPIToken={{ pve_api_token_full_id }}={{ pve_api_token_secret }}"
-  register: pve_nodes_resp
+  register: _pve_nodes_resp
   changed_when: false
   no_log: true
 
-- name: Extract cluster node names
+- name: Clone Preflight | Extract cluster node names
   ansible.builtin.set_fact:
-    pve_cluster_nodes: "{{ (pve_nodes_resp.json.data | default([])) | map(attribute='node') | list }}"
+    _pve_cluster_nodes: >-
+      {{ (_pve_nodes_resp.json.data | default([])) | map(attribute='node') | list }}
 
-- name: Set default target node fallback
+- name: Clone Preflight | Resolve default target node
   ansible.builtin.set_fact:
-    pve_clone_default_target_node: "{{ pve_clone_target_node | default(pve_api_host) }}"
+    _pve_clone_default_node: "{{ pve_clone_target_node | default(pve_api_host) }}"
 
-- name: Assert default target node exists in the cluster
+- name: Clone Preflight | Assert default target node is in the cluster
   ansible.builtin.assert:
     that:
-      - pve_clone_default_target_node in pve_cluster_nodes
-    fail_msg: "Default target node '{{ pve_clone_default_target_node }}' not in nodes {{ pve_cluster_nodes }}."
+      - _pve_clone_default_node in _pve_cluster_nodes
+    fail_msg: >-
+      Default clone target node '{{ _pve_clone_default_node }}' not found in
+      cluster nodes {{ _pve_cluster_nodes }}.
 
-- name: Verify template exists
+# ----- Template verification -------------------------------------------------
+
+- name: Clone Preflight | Verify template VMID exists and is a template
   community.proxmox.proxmox_vm_info:
-    api_host: "{{ pve_api_host }}"
-    api_port: "{{ pve_api_port | default(8006) }}"
-    api_user: "{{ pve_api_user }}"
-    api_token_id: "{{ pve_api_token_id }}"
+    api_host:         "{{ pve_api_host }}"
+    api_port:         "{{ pve_api_port | default(8006) }}"
+    api_user:         "{{ pve_api_user }}"
+    api_token_id:     "{{ pve_api_token_id }}"
     api_token_secret: "{{ pve_api_token_secret }}"
-    validate_certs: "{{ pve_validate_certs | default(false) }}"
+    validate_certs:   "{{ pve_validate_certs | default(false) }}"
     type: qemu
     vmid: "{{ pve_clone_template_id }}"
-  register: template_info
+  register: _template_info
 
-- name: Assert template exists and is a template
+- name: Clone Preflight | Assert template exists and is flagged as template
   ansible.builtin.assert:
     that:
-      - (template_info.proxmox_vms | length) == 1
-      - template_info.proxmox_vms[0].template | bool
-    fail_msg: "Template VMID {{ pve_clone_template_id }} does not exist or is not a template"
+      - (_template_info.proxmox_vms | length) == 1
+      - _template_info.proxmox_vms[0].template | bool
+    fail_msg: >-
+      VMID {{ pve_clone_template_id }} does not exist or is not marked as a
+      template in Proxmox. Verify pve_clone_template_id is correct.
 
-- name: Initialize clone plan list
+# ----- Build clone plan ------------------------------------------------------
+
+- name: Clone Preflight | Initialise clone plan
   ansible.builtin.set_fact:
     pve_clone_plan: []
 
-- name: Build clone plan for each target
+- name: Clone Preflight | Build clone plan entry for each target
   ansible.builtin.set_fact:
     pve_clone_plan: >-
       {{
@@ -96,71 +127,64 @@
             'vmid': hostvars[item].pve_vmid | int,
             'target_node': (
               hostvars[item].pve_clone_target_node
-              | default(hostvars[item].clone_target_node)
-              | default(pve_clone_default_target_node)
+              | default(hostvars[item].clone_target_node
+              | default(_pve_clone_default_node))
             ),
-            'storage': (
-              hostvars[item].pve_clone_storage
-              | default(pve_clone_storage)
-            ),
-            'format': (
-              hostvars[item].pve_clone_format
-              | default(pve_clone_format)
-            ),
-            'pool': (
-              hostvars[item].pve_pool
-              | default(pve_clone_pool)
-            ),
-            'full': (
-              hostvars[item].pve_clone_full
-              | default(pve_clone_full)
-            ) | bool,
+            'storage': hostvars[item].pve_clone_storage | default(pve_clone_storage),
+            'format': hostvars[item].pve_clone_format | default(pve_clone_format),
+            'pool': hostvars[item].pve_pool | default(pve_clone_pool),
+            'full': (hostvars[item].pve_clone_full | default(pve_clone_full)) | bool,
+
             'ipconfig': (
               hostvars[item].pve_ipconfig
-              | default(
-                {'ipconfig0': 'ip=' + hostvars[item].ansible_host + '/' + ((hostvars[item].pve_prefix | default(hostvars[item].pve_create_prefix) | default(pve_create_prefix)) | string) + ',gw=' + (hostvars[item].pve_gateway | default(hostvars[item].pve_create_gateway) | default(pve_create_gateway))}
-              )
-            ) if pve_create_use_cloudinit | default(false) | bool else {},
-            'ciuser': (
-              hostvars[item].pve_ciuser
-              | default(pve_create_ciuser)
-            ) if pve_create_use_cloudinit | default(false) | bool else '',
-            'cipassword': (
-              hostvars[item].pve_cipassword
-              | default(pve_create_cipassword)
-            ) if pve_create_use_cloudinit | default(false) | bool else '',
-            'sshkeys': (
-              hostvars[item].pve_sshkeys
-              | default(pve_create_sshkeys)
-            ) if pve_create_use_cloudinit | default(false) | bool else '',
-            'tags': (
-              hostvars[item].pve_tags
-              | default(pve_create_tags)
-            ),
-            'autostart': (
-              hostvars[item].pve_autostart
-              | default(pve_create_autostart)
-            ) | bool
+              | default({
+                'ipconfig0':
+                  'ip=' + hostvars[item].ansible_host
+                  + '/' + ((hostvars[item].pve_prefix
+                             | default(hostvars[item].pve_create_prefix)
+                             | default(pve_create_prefix)) | string)
+                  + ',gw=' + (hostvars[item].pve_gateway
+                               | default(hostvars[item].pve_create_gateway)
+                               | default(pve_create_gateway))
+              })
+            ) if (pve_create_use_cloudinit | default(false) | bool) else {},
+
+            'ciuser': (hostvars[item].pve_ciuser | default(pve_create_ciuser))
+              if (pve_create_use_cloudinit | default(false) | bool) else '',
+
+            'cipassword': (hostvars[item].pve_cipassword | default(pve_create_cipassword))
+              if (pve_create_use_cloudinit | default(false) | bool) else '',
+
+            'sshkeys': (hostvars[item].pve_sshkeys | default(pve_create_sshkeys))
+              if (pve_create_use_cloudinit | default(false) | bool) else '',
+
+            'tags': hostvars[item].pve_tags | default(pve_create_tags),
+            'autostart': (hostvars[item].pve_autostart | default(pve_create_autostart)) | bool
           }
         ]
       }}
-  loop: "{{ pve_clone_targets_resolved }}"
+  loop: "{{ _pve_clone_targets }}"
 
-- name: Assert computed VMIDs are unique
+# ----- Plan validation -------------------------------------------------------
+
+- name: Clone Preflight | Assert VMIDs in the plan are unique
   ansible.builtin.assert:
     that:
-      - (pve_clone_plan | map(attribute='vmid') | list) | length
-        == ((pve_clone_plan | map(attribute='vmid') | list) | unique | length)
-    fail_msg: "Duplicate VMIDs in clone plan: {{ pve_clone_plan | map(attribute='vmid') | list }}"
+      - (pve_clone_plan | map(attribute='vmid') | list | length)
+        == (pve_clone_plan | map(attribute='vmid') | list | unique | length)
+    fail_msg: >-
+      Duplicate VMIDs in clone plan: {{ pve_clone_plan | map(attribute='vmid') | list }}.
+      Assign unique pve_vmid values in inventory or host_vars.
 
-- name: Assert each target node exists in the cluster
+- name: Clone Preflight | Assert each plan target node is in the cluster
   ansible.builtin.assert:
     that:
-      - item.target_node in pve_cluster_nodes
-    fail_msg: "Target node '{{ item.target_node }}' for '{{ item.host }}' not in nodes {{ pve_cluster_nodes }}."
+      - item.target_node in _pve_cluster_nodes
+    fail_msg: >-
+      Target node '{{ item.target_node }}' for '{{ item.host }}' not found
+      in cluster nodes {{ _pve_cluster_nodes }}.
   loop: "{{ pve_clone_plan }}"
 
-- name: Show resolved clone plan
+- name: Clone Preflight | Display resolved clone plan
   ansible.builtin.debug:
-    msg:
-      plan: "{{ pve_clone_plan }}"
+    msg: "{{ pve_clone_plan }}"
