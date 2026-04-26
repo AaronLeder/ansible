@@ -137,9 +137,17 @@ pve_create_cloudinit_storage: "mydata"
 
 # ----- ISO / CDROM -----
 # ISO images live on 'local' storage (dir, 870 GiB free).
-# Leave empty when using cloud-init templates (the normal path).
-# Example: "local:iso/ubuntu-24.04.2-live-server-amd64.iso"
-pve_create_iso: ""
+# For installer-based builds, set pve_create_iso_name in group_vars and this
+# role will resolve the full Proxmox volume path automatically.
+# Leave pve_create_iso_name empty when cloning from a pre-made template.
+pve_create_iso_storage: "local"
+pve_create_iso_name: "ubuntu-26.04-live-server-amd64.iso"
+pve_create_iso: >-
+  {{
+    (pve_create_iso_storage | default('local')) ~ ':iso/' ~ pve_create_iso_name
+    if ((pve_create_iso_name | default('') | string | length) > 0)
+    else ''
+  }}
 
 # ----- Misc Options -----
 pve_create_agent:      "enabled=1"   # QEMU guest agent — enables shutdown/IP detection from Proxmox UI
@@ -172,11 +180,12 @@ pve_create_sshkeys:    ""            # URL-encoded SSH public key(s) injected at
 # these vars in the relevant group_vars/<group>/main.yml:
 #
 #   pve_clone_template_id:   9001
-#   pve_clone_template_name: "kibana-ubuntu-cloudinit"
+#   pve_clone_template_name: "kibana-template"
 #   pve_template_image_url:  "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 #
-# All templates use the same base Ubuntu cloud image by default. Override
-# pve_template_image_url per group if different distros are needed.
+# If you maintain templates manually from ISOs already stored in Proxmox,
+# simply point pve_clone_template_id/name at the existing template and the
+# clone workflow will use it directly without rebuilding.
 # =============================================================================
 
 # Cloud image source — Ubuntu 24.04 LTS (Noble Numbat), updated daily

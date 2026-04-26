@@ -18,14 +18,17 @@ pve_create_prefix:  24
 pve_create_gateway: "192.168.30.1"
 
 # ===== Template ===== #
-# Each application group can point to its own template VMID and name.
-# If the template doesn't exist, vm_build_template.yml creates it automatically.
+# Use the pre-built Proxmox template for elastic nodes.
+# This template can be maintained manually from an ISO inside Proxmox and then
+# cloned by VMID/name from this group.
 pve_clone_template_id:   9000
-pve_clone_template_name: "elastic-ubuntu-cloudinit"
+pve_clone_template_name: "elastic-template"
 pve_clone_target_node:   "walnut"
 
-# Cloud image — Ubuntu 24.04 LTS (same for all groups unless overridden)
-# pve_template_image_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+# Optional installer ISO selector for scratch/ISO-based builds on Proxmox.
+# The role resolves this to "local:iso/<name>" when pve_create_enabled=true.
+pve_create_iso_storage: "local"
+pve_create_iso_name: "ubuntu-26.04-live-server-amd64.iso"
 
 # ===== Clone Storage ===== #
 pve_clone_storage: "mydata"
