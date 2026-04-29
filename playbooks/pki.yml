@@ -1,0 +1,18 @@
+---
+- name: Generate local PKI material
+  hosts: elasticsearch
+  gather_facts: true
+  become: false
+
+  pre_tasks:
+    - name: "safety | Require explicit tags"
+      ansible.builtin.fail:
+        msg: "This playbook requires an explicit tag. Example: -t pki"
+      when: ansible_run_tags == ['all']
+      tags:
+        - always
+
+  roles:
+    - role: pki
+      tags:
+        - pki

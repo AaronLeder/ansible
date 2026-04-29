@@ -57,3 +57,25 @@ pve_onboot:     true
 pve_protection: false
 pve_agent:      "enabled=1"
 pve_autostart:  true
+
+# ===== PKI ===== #
+pki_profile_name: elastic
+pki_output_dir: "{{ playbook_dir }}/certificates/elastic"
+
+pki_generate_ca: true
+pki_generate_host_certs: true
+
+pki_ca_common_name: "Elastic Local CA"
+
+# Standard SANs for all Elastic hosts.
+# This assumes inventory_hostname, ansible_hostname, ansible_fqdn, and ansible_host
+# are valid names/IPs clients may use to reach the node.
+pki_host_subject_alt_names:
+  - "DNS:{{ inventory_hostname }}"
+  - "DNS:{{ ansible_hostname | default(inventory_hostname) }}"
+  - "DNS:{{ ansible_fqdn | default(inventory_hostname) }}"
+  - "IP:{{ ansible_host }}"
+
+# Optional per-host additions.
+# Define this in host_vars only when a host has extra aliases, VIPs, or alternate names.
+pki_host_extra_subject_alt_names: []

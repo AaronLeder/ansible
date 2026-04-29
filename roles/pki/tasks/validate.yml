@@ -1,0 +1,46 @@
+---
+# ===========================================================================
+# Validate PKI inputs and destructive operation guards.
+# ===========================================================================
+
+- name: "pki | Validate pki_output_dir is defined"
+  ansible.builtin.assert:
+    that:
+      - pki_output_dir is defined
+      - pki_output_dir | length > 0
+    fail_msg: "pki_output_dir must be defined."
+  tags:
+    - always
+
+- name: "pki | Validate destructive reset confirmation"
+  ansible.builtin.assert:
+    that:
+      - pki_confirm_reset_output_dir | bool
+    fail_msg: >
+      pki_reset_output_dir=true is destructive. You must also set
+      pki_confirm_reset_output_dir=true to delete existing PKI material.
+  when: pki_reset_output_dir | bool
+  tags:
+    - always
+
+- name: "pki | Validate CA settings"
+  ansible.builtin.assert:
+    that:
+      - pki_ca_common_name | length > 0
+      - pki_ca_not_after | length > 0
+    fail_msg: "CA settings are incomplete."
+  when: pki_generate_ca | bool
+  tags:
+    - always
+
+- name: "pki | Validate host certificate settings"
+  ansible.builtin.assert:
+    that:
+      - pki_host_common_name | length > 0
+      - pki_host_subject_alt_names | length > 0
+    fail_msg: >
+      Host certificate settings are incomplete. At least one SAN should be
+      provided in pki_host_subject_alt_names.
+  when: pki_generate_host_certs | bool
+  tags:
+    - always

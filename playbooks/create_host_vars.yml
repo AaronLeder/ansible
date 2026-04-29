@@ -1,0 +1,98 @@
+---
+- name: Create host_vars files from inventory hostnames
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  vars:
+    # Inventory group or pattern to generate host_vars for.
+    # Example:
+    #   elastic
+    #   elasticsearch
+    #   all
+    target_inventory_pattern: all
+
+    # Assumes inventory layout:
+    #   inventory/
+    #     master_hosts.yml
+    #     host_vars/
+    host_vars_dir: "{{ inventory_dir }}/host_vars"
+
+    # If true, this playbook creates missing host_vars files.
+    create_missing_host_vars: true
+
+  tasks:
+    # ---------------------------------------------------------------------------
+    # Build the list of inventory hostnames from the selected inventory pattern.
+    # This uses Ansible's inventory_hostnames lookup so the list comes directly
+    # from inventory instead of being manually maintained.
+    # ---------------------------------------------------------------------------
+    - name: "host_vars | Build target host list from inventory"
+      ansible.builtin.set_fact:
+        target_inventory_hosts: "{{ query('ansible.builtin.inventory_hostnames', target_inventory_pattern) }}"
+      tags:
+        - host_vars
+        - host_vars_build
+
+    # ---------------------------------------------------------------------------
+    # Guard against running against an empty or incorrect inventory pattern.
+    # Example:
+    #   -e target_inventory_pattern=elastic
+    # ---------------------------------------------------------------------------
+    - name: "host_vars | Validate target host list is not empty"
+      ansible.builtin.assert:
+        that:
+          - target_inventory_hosts | length > 0
+        fail_msg: >
+          No hosts matched target_inventory_pattern='{{ target_inventory_pattern }}'.
+          Check the group or host pattern.
+      tags:
+        - host_vars
+        - host_vars_validate
+
+    # ---------------------------------------------------------------------------
+    # Ensure the host_vars directory exists before writing files.
+    # ---------------------------------------------------------------------------
+    - name: "host_vars | Ensure host_vars directory exists"
+      ansible.builtin.file:
+        path: "{{ host_vars_dir }}"
+        state: directory
+        mode: "0755"
+      tags:
+        - host_vars
+        - host_vars_directory
+
+    # ---------------------------------------------------------------------------
+    # Create/update each host_vars file with a managed PKI block.
+    #
+    # This does not overwrite the entire file. It only manages the block between:
+    #   BEGIN ANSIBLE MANAGED PKI VARS
+    #   END ANSIBLE MANAGED PKI VARS
+    #
+    # ansible_host is included as an IP SAN only when it looks like an IPv4 address.
+    # If ansible_host is a DNS name, it is added as a DNS SAN instead.
+    # ---------------------------------------------------------------------------
+    - name: "host_vars | Create or update host_vars files with PKI SANs"
+      ansible.builtin.blockinfile:
+        path: "{{ host_vars_dir }}/{{ item }}.yml"
+        create: "{{ create_missing_host_vars | bool }}"
+        mode: "0644"
+        marker: "# {mark} ANSIBLE MANAGED PKI VARS"
+        block: |
+          # ===== PKI Vars ===== #
+          # Generated from inventory host: {{ item }}
+          pki_host_extra_subject_alt_names:
+            - "DNS:{{ item }}"
+          {% if hostvars[item].ansible_host is defined %}
+          {%   if hostvars[item].ansible_host is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$') %}
+            - "IP:{{ hostvars[item].ansible_host }}"
+          {%   else %}
+            - "DNS:{{ hostvars[item].ansible_host }}"
+          {%   endif %}
+          {% endif %}
+      loop: "{{ target_inventory_hosts }}"
+      loop_control:
+        label: "{{ item }}"
+      tags:
+        - host_vars
+        - host_vars_pki

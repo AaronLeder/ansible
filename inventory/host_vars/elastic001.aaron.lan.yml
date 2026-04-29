@@ -12,8 +12,8 @@ pve_vmid: 301
 # Common reasons: coordinating node needs more RAM, different target node,
 # dedicated SSH key, or a separate storage pool.
 #
-# pve_clone_target_node: "rainbow"
-# pve_cores:    8
-# pve_memory:   16384
-# pve_disk_size: 200
-# pve_sshkeys:  "ssh-ed25519 AAAA... ansible@maint001"
+# pve_clone_target_node: "elastic-template"
+# pve_cores:    3
+# pve_memory:   8192
+# pve_disk_size: 100
+# pve_sshkeys:  ""

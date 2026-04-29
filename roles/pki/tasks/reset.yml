@@ -1,0 +1,16 @@
+---
+# ===========================================================================
+# Destructive reset of local PKI output directory.
+# This runs once on the Ansible controller only.
+# ===========================================================================
+
+- name: "pki | Reset PKI output directory"
+  ansible.builtin.file:
+    path: "{{ pki_output_dir }}"
+    state: absent
+  delegate_to: localhost
+  run_once: true
+  tags:
+    - pki
+    - pki_reset
+    - destructive

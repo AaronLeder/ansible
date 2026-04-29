@@ -42,3 +42,12 @@ pve_onboot:     true
 pve_protection: false
 pve_agent:      "enabled=1"
 pve_autostart:  true
+
+# ===== PKI Vars ===== #
+# The way I have these variables below assumes they are the SAME
+# as the existing hostname and IP address. Redundancy never hurts.
+pki_host_extra_subject_alt_names:
+  - "DNS:{{ inventory_hostname }}"
+  - "DNS:{{ ansible_hostname | default(inventory_hostname) }}"
+  - "DNS:{{ ansible_fqdn | default(inventory_hostname) }}"
+  - "IP:{{ ansible_host }}"

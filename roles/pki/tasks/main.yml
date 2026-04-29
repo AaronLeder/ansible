@@ -1,0 +1,45 @@
+---
+# ===========================================================================
+# pki
+# Generate local CA and host certificates on the Ansible controller.
+# ===========================================================================
+
+- name: "pki | Validate inputs"
+  ansible.builtin.import_tasks: validate.yml
+  tags:
+    - always
+
+- name: "pki | Reset PKI output directory"
+  ansible.builtin.import_tasks: reset.yml
+  when:
+    - pki_enabled | bool
+    - pki_reset_output_dir | bool
+  tags:
+    - pki
+    - pki_reset
+    - destructive
+
+- name: "pki | Create PKI directories"
+  ansible.builtin.import_tasks: directories.yml
+  when: pki_enabled | bool
+  tags:
+    - pki
+    - pki_directories
+
+- name: "pki | Generate local CA"
+  ansible.builtin.import_tasks: ca.yml
+  when:
+    - pki_enabled | bool
+    - pki_generate_ca | bool
+  tags:
+    - pki
+    - pki_ca
+
+- name: "pki | Generate host certificates"
+  ansible.builtin.import_tasks: host_certs.yml
+  when:
+    - pki_enabled | bool
+    - pki_generate_host_certs | bool
+  tags:
+    - pki
+    - pki_host_certs

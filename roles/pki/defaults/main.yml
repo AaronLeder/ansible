@@ -1,0 +1,90 @@
+---
+# ===========================================================================
+# pki defaults
+# Local PKI generation on the Ansible controller.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# General PKI controls
+# ---------------------------------------------------------------------------
+pki_enabled: true
+
+# Used to keep PKI material grouped by purpose.
+# Example:
+#   elastic
+#   nginx
+#   kafka
+# ---------------------------------------------------------------------------
+pki_profile_name: elastic
+
+# Root output directory on the Ansible controller.
+# This keeps generated material next to the playbook by default.
+# ---------------------------------------------------------------------------
+pki_output_dir: "{{ playbook_dir }}/certificates/{{ pki_profile_name }}"
+
+# ---------------------------------------------------------------------------
+# Destructive reset controls
+# Both variables must be true before the role deletes the PKI output directory.
+# ---------------------------------------------------------------------------
+pki_reset_output_dir: false
+pki_confirm_reset_output_dir: false
+
+# ---------------------------------------------------------------------------
+# CA settings
+# ---------------------------------------------------------------------------
+pki_generate_ca: true
+pki_ca_key_path: "{{ pki_output_dir }}/ca.key"
+pki_ca_csr_path: "{{ pki_output_dir }}/ca.csr"
+pki_ca_cert_path: "{{ pki_output_dir }}/ca.crt"
+
+pki_ca_key_type: RSA
+pki_ca_key_size: 2048
+
+pki_ca_country_name: US
+pki_ca_state_or_province_name: Atropia
+pki_ca_locality_name: Krasnovia
+pki_ca_organization_name: Self
+pki_ca_organizational_unit_name: Self
+pki_ca_common_name: "Ansible Generated CA"
+
+pki_ca_not_before: "-1d"
+pki_ca_not_after: "+1000d"
+
+# ---------------------------------------------------------------------------
+# Host certificate settings
+# ---------------------------------------------------------------------------
+pki_generate_host_certs: true
+
+pki_host_key_type: ECC
+pki_host_key_curve: secp384r1
+
+pki_host_key_path: "{{ pki_output_dir }}/{{ inventory_hostname }}.key"
+pki_host_csr_path: "{{ pki_output_dir }}/{{ inventory_hostname }}.csr"
+pki_host_cert_path: "{{ pki_output_dir }}/{{ inventory_hostname }}.crt"
+
+pki_host_common_name: "{{ inventory_hostname }}"
+
+# Modern TLS validation expects SANs.
+# CN alone is not enough for many clients.
+# ---------------------------------------------------------------------------
+pki_host_subject_alt_names:
+  - "DNS:{{ inventory_hostname }}"
+
+# Add more SANs from inventory/group_vars/host_vars if needed.
+# Example:
+#   pki_host_extra_subject_alt_names:
+#     - DNS:node01.example.com
+#     - IP:10.10.10.11
+# ---------------------------------------------------------------------------
+pki_host_extra_subject_alt_names: []
+
+pki_host_not_before: "-1d"
+pki_host_not_after: "+1000d"
+
+# ---------------------------------------------------------------------------
+# File permissions
+# ---------------------------------------------------------------------------
+pki_output_dir_mode: "0755"
+pki_private_key_mode: "0600"
+pki_cert_mode: "0644"
+pki_csr_mode: "0644"

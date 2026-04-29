@@ -1,0 +1,16 @@
+---
+# ===========================================================================
+# Create local PKI output directory.
+# This runs once on the Ansible controller only.
+# ===========================================================================
+
+- name: "pki | Create PKI output directory"
+  ansible.builtin.file:
+    path: "{{ pki_output_dir }}"
+    state: directory
+    mode: "{{ pki_output_dir_mode }}"
+  delegate_to: localhost
+  run_once: true
+  tags:
+    - pki
+    - pki_directories

@@ -1,0 +1,60 @@
+---
+# ===========================================================================
+# Generate local certificate authority.
+# This runs once on the Ansible controller only.
+# ===========================================================================
+
+- name: "pki | Generate CA private key"
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_ca_key_path }}"
+    size: "{{ pki_ca_key_size }}"
+    type: "{{ pki_ca_key_type }}"
+    mode: "{{ pki_private_key_mode }}"
+  delegate_to: localhost
+  run_once: true
+  tags:
+    - pki
+    - pki_ca
+    - pki_ca_key
+
+- name: "pki | Generate CA CSR"
+  community.crypto.openssl_csr:
+    path: "{{ pki_ca_csr_path }}"
+    privatekey_path: "{{ pki_ca_key_path }}"
+    country_name: "{{ pki_ca_country_name }}"
+    state_or_province_name: "{{ pki_ca_state_or_province_name }}"
+    locality_name: "{{ pki_ca_locality_name }}"
+    organization_name: "{{ pki_ca_organization_name }}"
+    organizational_unit_name: "{{ pki_ca_organizational_unit_name }}"
+    common_name: "{{ pki_ca_common_name }}"
+    basic_constraints:
+      - "CA:TRUE"
+    basic_constraints_critical: true
+    key_usage:
+      - keyCertSign
+      - cRLSign
+    key_usage_critical: true
+    mode: "{{ pki_csr_mode }}"
+  delegate_to: localhost
+  run_once: true
+  tags:
+    - pki
+    - pki_ca
+    - pki_ca_csr
+
+- name: "pki | Generate self-signed CA certificate"
+  community.crypto.x509_certificate:
+    path: "{{ pki_ca_cert_path }}"
+    privatekey_path: "{{ pki_ca_key_path }}"
+    csr_path: "{{ pki_ca_csr_path }}"
+    provider: selfsigned
+    selfsigned_not_before: "{{ pki_ca_not_before }}"
+    selfsigned_not_after: "{{ pki_ca_not_after }}"
+    selfsigned_version: 3
+    mode: "{{ pki_cert_mode }}"
+  delegate_to: localhost
+  run_once: true
+  tags:
+    - pki
+    - pki_ca
+    - pki_ca_cert

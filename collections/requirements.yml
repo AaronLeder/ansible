@@ -1,0 +1,5 @@
+---
+# Role: pki
+# ansible-galaxy collection install -r collections/requirements.yml
+collections:
+  - name: community.crypto

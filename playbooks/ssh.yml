@@ -1,6 +1,6 @@
 ---
 - name: Share SSH pub key(s)
-  hosts: all
+  hosts: elastic001.aaron.lan
   order: sorted
   gather_facts: false
   roles:

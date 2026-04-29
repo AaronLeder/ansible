@@ -1,0 +1,47 @@
+---
+# ===========================================================================
+# Generate host private key, CSR, and certificate.
+# These tasks run once per inventory host, but execute on localhost.
+# ===========================================================================
+
+- name: "pki | Generate host private key"
+  community.crypto.openssl_privatekey:
+    path: "{{ pki_host_key_path }}"
+    type: "{{ pki_host_key_type }}"
+    curve: "{{ pki_host_key_curve }}"
+    mode: "{{ pki_private_key_mode }}"
+  delegate_to: localhost
+  tags:
+    - pki
+    - pki_host_certs
+    - pki_host_key
+
+- name: "pki | Generate host CSR"
+  community.crypto.openssl_csr:
+    path: "{{ pki_host_csr_path }}"
+    privatekey_path: "{{ pki_host_key_path }}"
+    common_name: "{{ pki_host_common_name }}"
+    subject_alt_name: "{{ pki_host_subject_alt_names + pki_host_extra_subject_alt_names }}"
+    mode: "{{ pki_csr_mode }}"
+  delegate_to: localhost
+  tags:
+    - pki
+    - pki_host_certs
+    - pki_host_csr
+
+- name: "pki | Sign host certificate with local CA"
+  community.crypto.x509_certificate:
+    path: "{{ pki_host_cert_path }}"
+    csr_path: "{{ pki_host_csr_path }}"
+    provider: ownca
+    ownca_path: "{{ pki_ca_cert_path }}"
+    ownca_privatekey_path: "{{ pki_ca_key_path }}"
+    ownca_not_before: "{{ pki_host_not_before }}"
+    ownca_not_after: "{{ pki_host_not_after }}"
+    ownca_version: 3
+    mode: "{{ pki_cert_mode }}"
+  delegate_to: localhost
+  tags:
+    - pki
+    - pki_host_certs
+    - pki_host_cert
